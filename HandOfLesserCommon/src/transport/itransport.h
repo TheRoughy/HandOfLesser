@@ -1,8 +1,10 @@
 #pragma once
 
-#include <array>
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <limits>
+#include <vector>
 #include "src/packet/nativepacket.h"
 
 namespace HOL
@@ -12,10 +14,11 @@ namespace HOL
 		NativePacketType packetType = NativePacketType::InvalidPacket;
 		const char* payload = nullptr;
 		size_t payloadSize = 0;
+		bool valid = false;
 
 		explicit operator bool() const
 		{
-			return payload != nullptr;
+			return valid;
 		}
 
 		template <typename T> bool copyPayload(T& out) const
@@ -57,27 +60,37 @@ namespace HOL
 
 		// Build the exact wire message as [NativePacket header][payload]. Do not send a typed
 		// envelope struct directly; padding would become part of the protocol.
-		template <NativePacketType Type, typename Payload> size_t sendPayload(const Payload& payload)
+		size_t sendPayloadBytes(NativePacketType type, const char* payload, size_t payloadSize)
 		{
-			static_assert(sizeof(NativePacket) + sizeof(Payload) <= NativePacketBufferSize);
+			if (payloadSize > MaxNativePacketPayloadSize
+				|| payloadSize > (std::numeric_limits<uint32_t>::max)()
+				|| (payloadSize > 0 && payload == nullptr))
+			{
+				return 0;
+			}
 
 			NativePacket packet{
-				.packetType = Type,
-				.payloadSize = static_cast<uint32_t>(sizeof(Payload)),
+				.packetType = type,
+				.payloadSize = static_cast<uint32_t>(payloadSize),
 			};
-			std::array<char, sizeof(NativePacket) + sizeof(Payload)> packetBuffer{};
+			std::vector<char> packetBuffer(sizeof(NativePacket) + payloadSize);
 			std::memcpy(packetBuffer.data(), &packet, sizeof(packet));
-			std::memcpy(packetBuffer.data() + sizeof(packet), &payload, sizeof(payload));
+			if (payloadSize > 0)
+			{
+				std::memcpy(packetBuffer.data() + sizeof(packet), payload, payloadSize);
+			}
 			return send(packetBuffer.data(), packetBuffer.size());
+		}
+
+		template <NativePacketType Type, typename Payload> size_t sendPayload(const Payload& payload)
+		{
+			static_assert(sizeof(Payload) <= MaxNativePacketPayloadSize);
+			return sendPayloadBytes(Type, reinterpret_cast<const char*>(&payload), sizeof(payload));
 		}
 
 		template <NativePacketType Type> size_t sendPacket()
 		{
-			NativePacket packet{
-				.packetType = Type,
-				.payloadSize = 0,
-			};
-			return send(packet);
+			return sendPayloadBytes(Type, nullptr, 0);
 		}
 
 		// Receive raw data into buffer - returns bytes received (0 on timeout/error)
@@ -88,31 +101,29 @@ namespace HOL
 		// next receive call, and callers should copy it into the expected payload type.
 		virtual NativePacketView receivePacket()
 		{
-			size_t length = receive(mReceiveBuffer, sizeof(mReceiveBuffer));
-			if (length < sizeof(NativePacket))
-			{
-				return {};
-			}
-
 			NativePacket packet;
-			std::memcpy(&packet, mReceiveBuffer, sizeof(packet));
-
-			constexpr size_t MaxPayloadSize = NativePacketBufferSize - sizeof(NativePacket);
-			if (packet.payloadSize > MaxPayloadSize)
+			if (!receiveExact(reinterpret_cast<char*>(&packet), sizeof(packet)))
 			{
 				return {};
 			}
 
-			const size_t expectedLength = sizeof(NativePacket) + packet.payloadSize;
-			if (length != expectedLength)
+			if (packet.payloadSize > MaxNativePacketPayloadSize)
+			{
+				return {};
+			}
+
+			mReceiveBuffer.resize(packet.payloadSize);
+			if (packet.payloadSize > 0
+				&& !receiveExact(mReceiveBuffer.data(), packet.payloadSize))
 			{
 				return {};
 			}
 
 			return NativePacketView{
 				.packetType = packet.packetType,
-				.payload = mReceiveBuffer + sizeof(NativePacket),
+				.payload = mReceiveBuffer.data(),
 				.payloadSize = packet.payloadSize,
+				.valid = true,
 			};
 		}
 
@@ -121,8 +132,26 @@ namespace HOL
 		virtual bool isConnected() const = 0;
 
 	protected:
-		// Buffer for receivePacket() implementation
-		char mReceiveBuffer[NativePacketBufferSize] = {};
+		bool receiveExact(char* buffer, size_t size)
+		{
+			size_t totalRead = 0;
+			while (totalRead < size)
+			{
+				const size_t remaining = size - totalRead;
+				const size_t chunkSize = (std::min)(remaining, NativePacketReadChunkSize);
+				const size_t bytesRead = receive(buffer + totalRead, chunkSize);
+				if (bytesRead == 0 || bytesRead > remaining)
+				{
+					return false;
+				}
+				totalRead += bytesRead;
+			}
+			return true;
+		}
+
+		// Buffer for receivePacket() implementation. Payload pointer remains valid until next
+		// receivePacket() call.
+		std::vector<char> mReceiveBuffer;
 	};
 
 } // namespace HOL

@@ -125,8 +125,7 @@ namespace HOL
 				}
 
 				case HOL::NativePacketType::Settings: {
-					HOL::SettingsPayload payload;
-					if (!nativePacket.copyPayload(payload))
+					if (nativePacket.payload == nullptr || nativePacket.payloadSize == 0)
 					{
 						break;
 					}
@@ -136,7 +135,8 @@ namespace HOL
 						HOL::settings::HandOfLesserSettings oldSettings = Config;
 
 						// Parse JSON from payload
-						nlohmann::json j = nlohmann::json::parse(payload.jsonData);
+						nlohmann::json j = nlohmann::json::parse(
+							nativePacket.payload, nativePacket.payload + nativePacket.payloadSize);
 						HandOfLesser::Config = j.get<HOL::settings::HandOfLesserSettings>();
 						persistAutoLaunchSetting();
 						if (Runtime.isSteamVR)

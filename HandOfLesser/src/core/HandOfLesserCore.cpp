@@ -657,15 +657,11 @@ void HOL::HandOfLesserCore::sendBodyTrackerData()
 
 void HOL::HandOfLesserCore::syncSettings()
 {
-	HOL::SettingsPayload payload;
 	nlohmann::json j = HOL::Config;
 	std::string jsonStr = j.dump();
 
-	// Copy JSON string to the settings payload buffer
-	std::strncpy(payload.jsonData, jsonStr.c_str(), sizeof(payload.jsonData) - 1);
-	payload.jsonData[sizeof(payload.jsonData) - 1] = '\0'; // Ensure null termination
-
-	this->mDriverTransport.sendPayload<NativePacketType::Settings>(payload);
+	this->mDriverTransport.sendPayloadBytes(
+		NativePacketType::Settings, jsonStr.data(), jsonStr.size());
 }
 
 void HOL::HandOfLesserCore::syncState()

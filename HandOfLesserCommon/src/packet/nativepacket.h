@@ -11,8 +11,8 @@
 
 namespace HOL
 {
-	inline constexpr size_t NativePacketBufferSize = 16384;
-	inline constexpr size_t SettingsNativePacketSize = NativePacketBufferSize;
+	inline constexpr size_t NativePacketReadChunkSize = 2 * 1024;
+	inline constexpr size_t MaxNativePacketPayloadSize = 1024 * 1024;
 
 	enum class NativePacketType : __int32
 	{
@@ -39,9 +39,6 @@ namespace HOL
 		NativePacketType packetType = NativePacketType::InvalidPacket;
 		uint32_t payloadSize = 0;
 	};
-
-	inline constexpr size_t SettingsPayloadJsonBufferSize
-		= SettingsNativePacketSize - sizeof(NativePacket);
 
 	// these'll ultimately handle all controller inputs
 	struct FloatInputPayload
@@ -77,11 +74,6 @@ namespace HOL
 		float fingerCurlMiddle = 0.0f;
 		float fingerCurlRing = 0.0f;
 		float fingerCurlPinky = 0.0f;
-	};
-
-	struct SettingsPayload
-	{
-		char jsonData[SettingsPayloadJsonBufferSize] = {}; // Settings serialized as JSON string
 	};
 
 	struct SkeletalPayload
@@ -170,7 +162,5 @@ namespace HOL
 		char appVersion[64] = HOL_VERSION_STRING; // For future version checks
 		uint32_t capabilities = 0;	   // Bitfield for future features
 	};
-
-	static_assert(sizeof(NativePacket) + sizeof(SettingsPayload) == SettingsNativePacketSize);
 
 } // namespace HOL

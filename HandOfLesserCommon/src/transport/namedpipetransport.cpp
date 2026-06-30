@@ -70,11 +70,11 @@ bool NamedPipeTransport::createServerPipe()
 	// Create the named pipe
 	mPipe = CreateNamedPipeA(mPipeName,
 							 PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, // Bidirectional, async
-							 PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE
-								 | PIPE_WAIT, // Message mode, blocking
+							 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE
+								 | PIPE_WAIT, // Byte mode; NativePacket provides framing.
 							 1,				  // Max instances (only 1 client allowed)
-							 16384,			  // Out buffer size
-							 16384,			  // In buffer size
+							 static_cast<DWORD>(MaxNativePacketPayloadSize + sizeof(NativePacket)),
+							 static_cast<DWORD>(MaxNativePacketPayloadSize + sizeof(NativePacket)),
 							 0,				  // Default timeout
 							 nullptr);		  // Default security
 
@@ -131,8 +131,8 @@ bool NamedPipeTransport::connectClientPipe()
 		return true;
 	}
 
-	// Set message read mode
-	DWORD mode = PIPE_READMODE_MESSAGE;
+	// NativePacket provides framing, so byte mode avoids message-size truncation.
+	DWORD mode = PIPE_READMODE_BYTE;
 	if (!SetNamedPipeHandleState(mPipe, &mode, nullptr, nullptr))
 	{
 		DWORD error = GetLastError();
