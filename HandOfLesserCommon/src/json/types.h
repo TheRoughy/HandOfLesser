@@ -264,6 +264,27 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "orientationOffset", settings.orientationOffset);
 		}
 
+		inline void to_json(nlohmann::json& j, const SteamVRPoseSmoothingSettings& settings)
+		{
+			j = {{"steamPoseTimeOffsetMS", settings.steamPoseTimeOffsetMS},
+				 {"positionSmoothingMS", settings.positionSmoothingMS},
+				 {"rotationSmoothingMS", settings.rotationSmoothingMS},
+				 {"linearVelocityMultiplier", settings.linearVelocityMultiplier},
+				 {"angularVelocityMultiplier", settings.angularVelocityMultiplier}};
+		}
+
+		inline void from_json(const nlohmann::json& j, SteamVRPoseSmoothingSettings& settings)
+		{
+			nlohmann::get_to_if_present(
+				j, "steamPoseTimeOffsetMS", settings.steamPoseTimeOffsetMS);
+			nlohmann::get_to_if_present(j, "positionSmoothingMS", settings.positionSmoothingMS);
+			nlohmann::get_to_if_present(j, "rotationSmoothingMS", settings.rotationSmoothingMS);
+			nlohmann::get_to_if_present(
+				j, "linearVelocityMultiplier", settings.linearVelocityMultiplier);
+			nlohmann::get_to_if_present(
+				j, "angularVelocityMultiplier", settings.angularVelocityMultiplier);
+		}
+
 		inline void to_json(nlohmann::json& j, const SteamVRSettings& settings)
 		{
 			j = {{"autoLaunchApp", settings.autoLaunchApp},
@@ -275,15 +296,13 @@ namespace HOL
 				 {"disableOtherControllersWhileHandTracking",
 				  settings.disableOtherControllersWhileHandTracking},
 				 {"showDevicePoseDiagnostics", settings.showDevicePoseDiagnostics},
-				 {"steamPoseTimeOffsetMS", settings.steamPoseTimeOffsetMS},
-				 {"positionSmoothingMS", settings.positionSmoothingMS},
-				 {"rotationSmoothingMS", settings.rotationSmoothingMS},
+				 {"poseSmoothing", settings.poseSmoothing},
+				 {"standardPoseSmoothing", settings.standardPoseSmoothing},
+				 {"vdxrPoseSmoothing", settings.vdxrPoseSmoothing},
 				 {"triggerStabilization", settings.triggerStabilization},
 				 {"triggerStabilizationSmoothingMS", settings.triggerStabilizationSmoothingMS},
 				 {"triggerStabilizationFalloffMS", settings.triggerStabilizationFalloffMS},
 				 {"handTrackingResumeBlendMS", settings.handTrackingResumeBlendMS},
-				 {"linearVelocityMultiplier", settings.linearVelocityMultiplier},
-				 {"angularVelocityMultiplier", settings.angularVelocityMultiplier},
 				 {"forceInactive", settings.forceInactive},
 				 {"jitterLastPoseOnTrackingLoss", settings.jitterLastPoseOnTrackingLoss}};
 		}
@@ -304,11 +323,11 @@ namespace HOL
 										settings.disableOtherControllersWhileHandTracking);
 			nlohmann::get_to_if_present(
 				j, "showDevicePoseDiagnostics", settings.showDevicePoseDiagnostics);
-			nlohmann::get_to_if_present(j, "steamPoseTimeOffsetMS", settings.steamPoseTimeOffsetMS);
+			nlohmann::get_to_if_present(j, "poseSmoothing", settings.poseSmoothing);
 			nlohmann::get_to_if_present(
-				j, "positionSmoothingMS", settings.positionSmoothingMS);
-			nlohmann::get_to_if_present(
-				j, "rotationSmoothingMS", settings.rotationSmoothingMS);
+				j, "standardPoseSmoothing", settings.standardPoseSmoothing);
+			nlohmann::get_to_if_present(j, "vdxrPoseSmoothing", settings.vdxrPoseSmoothing);
+
 			nlohmann::get_to_if_present(
 				j, "triggerStabilization", settings.triggerStabilization);
 			nlohmann::get_to_if_present(
@@ -317,10 +336,6 @@ namespace HOL
 				j, "triggerStabilizationFalloffMS", settings.triggerStabilizationFalloffMS);
 			nlohmann::get_to_if_present(
 				j, "handTrackingResumeBlendMS", settings.handTrackingResumeBlendMS);
-			nlohmann::get_to_if_present(
-				j, "linearVelocityMultiplier", settings.linearVelocityMultiplier);
-			nlohmann::get_to_if_present(
-				j, "angularVelocityMultiplier", settings.angularVelocityMultiplier);
 			nlohmann::get_to_if_present(j, "forceInactive", settings.forceInactive);
 			nlohmann::get_to_if_present(
 				j, "jitterLastPoseOnTrackingLoss", settings.jitterLastPoseOnTrackingLoss);

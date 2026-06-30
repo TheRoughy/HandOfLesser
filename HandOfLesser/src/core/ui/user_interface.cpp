@@ -1427,14 +1427,25 @@ void HOL::UserInterface::buildSteamVR()
 
 	ImGui::SeparatorText("General");
 
-	syncSettings |= ImGui::InputFloat(
-		"Steam Pose offset (ms)", &Config.steamvr.steamPoseTimeOffsetMS, 1.0f, 5.0f, "%.0f");
-	syncSettings |= ImGui::InputFloat(
-		"Position smoothing (ms)", &Config.steamvr.positionSmoothingMS, 1.0f, 5.0f, "%.0f");
-	syncSettings |= ImGui::InputFloat(
-		"Rotation smoothing (ms)", &Config.steamvr.rotationSmoothingMS, 1.0f, 5.0f, "%.0f");
-	syncSettings |= ImGui::Checkbox("Trigger stabilization",
-									&Config.steamvr.triggerStabilization);
+	ImGui::TextDisabled(
+		"Pose smoothing profile: %s", state::Runtime.isVDXR ? "VDXR" : "Standard");
+
+	syncSettings |= ImGui::InputFloat("Steam Pose offset (ms)",
+									  &Config.steamvr.poseSmoothing.steamPoseTimeOffsetMS,
+									  1.0f,
+									  5.0f,
+									  "%.0f");
+	syncSettings |= ImGui::InputFloat("Position smoothing (ms)",
+									  &Config.steamvr.poseSmoothing.positionSmoothingMS,
+									  1.0f,
+									  5.0f,
+									  "%.0f");
+	syncSettings |= ImGui::InputFloat("Rotation smoothing (ms)",
+									  &Config.steamvr.poseSmoothing.rotationSmoothingMS,
+									  1.0f,
+									  5.0f,
+									  "%.0f");
+	syncSettings |= ImGui::Checkbox("Trigger stabilization", &Config.steamvr.triggerStabilization);
 	syncSettings |= ImGui::InputFloat("Trigger stabilization amount (ms)",
 									  &Config.steamvr.triggerStabilizationSmoothingMS,
 									  10.0f,
@@ -1452,12 +1463,12 @@ void HOL::UserInterface::buildSteamVR()
 									  "%.0f");
 
 	syncSettings |= ImGui::InputFloat("Linear Velocity multiplier",
-									  &Config.steamvr.linearVelocityMultiplier,
+									  &Config.steamvr.poseSmoothing.linearVelocityMultiplier,
 									  0.05f,
 									  0.1f,
 									  "%.3f");
 	syncSettings |= ImGui::InputFloat("Angular Velocity multiplier",
-									  &Config.steamvr.angularVelocityMultiplier,
+									  &Config.steamvr.poseSmoothing.angularVelocityMultiplier,
 									  0.05f,
 									  0.1f,
 									  "%.3f");
@@ -1465,17 +1476,14 @@ void HOL::UserInterface::buildSteamVR()
 	if (rightAlignButton("Reset##SteamVRGeneral"))
 	{
 		HOL::settings::SteamVRSettings steamVrDefaults;
-		Config.steamvr.steamPoseTimeOffsetMS = steamVrDefaults.steamPoseTimeOffsetMS;
-		Config.steamvr.positionSmoothingMS = steamVrDefaults.positionSmoothingMS;
-		Config.steamvr.rotationSmoothingMS = steamVrDefaults.rotationSmoothingMS;
+		Config.steamvr.poseSmoothing
+			= HOL::settings::defaultSteamVRPoseSmoothingSettings(state::Runtime.isVDXR);
 		Config.steamvr.triggerStabilization = steamVrDefaults.triggerStabilization;
 		Config.steamvr.triggerStabilizationSmoothingMS
 			= steamVrDefaults.triggerStabilizationSmoothingMS;
 		Config.steamvr.triggerStabilizationFalloffMS
 			= steamVrDefaults.triggerStabilizationFalloffMS;
 		Config.steamvr.handTrackingResumeBlendMS = steamVrDefaults.handTrackingResumeBlendMS;
-		Config.steamvr.linearVelocityMultiplier = steamVrDefaults.linearVelocityMultiplier;
-		Config.steamvr.angularVelocityMultiplier = steamVrDefaults.angularVelocityMultiplier;
 		syncSettings = true;
 	}
 

@@ -450,11 +450,13 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 				rawPalmVelocity.angularVelocity *= resumeBlendAlpha;
 			}
 
-			rawPalmVelocity.linearVelocity *= HOL::Config.steamvr.linearVelocityMultiplier;
-			rawPalmVelocity.angularVelocity *= HOL::Config.steamvr.angularVelocityMultiplier;
+			rawPalmVelocity.linearVelocity
+				*= HOL::Config.steamvr.poseSmoothing.linearVelocityMultiplier;
+			rawPalmVelocity.angularVelocity
+				*= HOL::Config.steamvr.poseSmoothing.angularVelocityMultiplier;
 
 			float positionSmoothingAlpha
-				= getSmoothingAlpha(HOL::Config.steamvr.positionSmoothingMS
+				= getSmoothingAlpha(HOL::Config.steamvr.poseSmoothing.positionSmoothingMS
 										+ triggerStabilizationSmoothingMS,
 									this->mHasFilteredPalmPose,
 									this->handPose.active != prevActive
@@ -462,7 +464,7 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 									this->mPrevFilteredSampleTime,
 									time);
 			float rotationSmoothingAlpha
-				= getSmoothingAlpha(HOL::Config.steamvr.rotationSmoothingMS
+				= getSmoothingAlpha(HOL::Config.steamvr.poseSmoothing.rotationSmoothingMS
 										+ triggerStabilizationSmoothingMS,
 									this->mHasFilteredPalmPose,
 									poseStateChanged,

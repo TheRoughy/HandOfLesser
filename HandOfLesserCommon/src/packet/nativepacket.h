@@ -12,6 +12,7 @@
 namespace HOL
 {
 	inline constexpr size_t NativePacketBufferSize = 16384;
+	inline constexpr size_t SettingsNativePacketSize = NativePacketBufferSize;
 
 	enum class NativePacketType : __int32
 	{
