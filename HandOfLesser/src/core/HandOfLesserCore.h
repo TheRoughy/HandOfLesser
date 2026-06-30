@@ -63,6 +63,9 @@ namespace HOL
 		std::atomic<bool> mActive = false;
 		std::atomic<bool> mShouldTerminate = false;
 		std::atomic<bool> mShouldRestart = false;
+		std::atomic<bool> mSettingsSyncRequested = false;
+		std::atomic<int64_t> mLastSettingsSyncTimeMS = 0;
+		static constexpr int64_t SettingsSyncDebounceMS = 50;
 
 		void userInterfaceLoop();
 		void receiveDataThread();
@@ -72,6 +75,8 @@ namespace HOL
 		void sendOscData();
 		void sendUpdate();
 		void sendBodyTrackerData();
+		void sendSettingsNow();
+		void flushSettings(bool force = false);
 		void onDriverConnected();
 	};
 } // namespace HOL

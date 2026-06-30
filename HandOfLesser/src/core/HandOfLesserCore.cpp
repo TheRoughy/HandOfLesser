@@ -6,6 +6,7 @@
 #include "src/core/settings_global.h"
 #include "src/core/state_global.h"
 #include "src/core/ui/display_global.h"
+#include "src/util/hol_utils.h"
 #include "src/vrchat/vrchat_osc.h"
 #include <algorithm>
 #include <filesystem>
@@ -326,7 +327,7 @@ void HOL::HandOfLesserCore::receiveDataThread()
 				// Send runtime state first so the driver can apply runtime-specific config
 				// overrides while parsing the settings payload.
 				syncState();
-				syncSettings();
+				sendSettingsNow();
 				onDriverConnected();
 				break;
 			}
@@ -471,6 +472,8 @@ void HandOfLesserCore::mainLoop()
 
 		// draw queue swapping because UI and main loop are not in sync
 		this->mUserInterface.Current->getVisualizer()->swapOuterDrawQueue();
+
+		this->flushSettings();
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(Config.general.updateIntervalMS));
 	}
@@ -657,11 +660,36 @@ void HOL::HandOfLesserCore::sendBodyTrackerData()
 
 void HOL::HandOfLesserCore::syncSettings()
 {
+	this->mSettingsSyncRequested.store(true);
+}
+
+void HOL::HandOfLesserCore::sendSettingsNow()
+{
 	nlohmann::json j = HOL::Config;
 	std::string jsonStr = j.dump();
 
 	this->mDriverTransport.sendPayloadBytes(
 		NativePacketType::Settings, jsonStr.data(), jsonStr.size());
+
+	this->mLastSettingsSyncTimeMS.store(steadyNowMS());
+	this->mSettingsSyncRequested.store(false);
+}
+
+void HOL::HandOfLesserCore::flushSettings(bool force)
+{
+	if (!force && !this->mSettingsSyncRequested.load())
+	{
+		return;
+	}
+
+	const int64_t now = steadyNowMS();
+	if (!force
+		&& now - this->mLastSettingsSyncTimeMS.load() < this->SettingsSyncDebounceMS)
+	{
+		return;
+	}
+
+	this->sendSettingsNow();
 }
 
 void HOL::HandOfLesserCore::syncState()
