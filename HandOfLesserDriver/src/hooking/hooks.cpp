@@ -295,11 +295,8 @@ namespace HOL::hooks
 				auto controllerMode = config.handPose.controllerMode;
 				if (controllerMode == ControllerMode::HookedControllerMode)
 				{
-					bool fallbackOnlyActive = config.handPose.fallbackOnly && !HOL::HandOfLesser::Runtime.isOVR;
-					bool shouldPossess
-						= HOL::HandOfLesser::Current->shouldPossess(controller.get());
 					bool shouldSubmitFallbackPose
-						= shouldPossess && (!fallbackOnlyActive || !newPoseValid);
+						= HOL::HandOfLesser::Current->shouldPossessPose(controller.get());
 
 					// Just do nothing if we are possessing controllers and need to replace the
 					// native pose outright.
@@ -309,7 +306,8 @@ namespace HOL::hooks
 						return;
 					}
 
-					if (fallbackOnlyActive && shouldPossess && newPoseValid)
+					if (HOL::HandOfLesser::Current->shouldPossessInput(controller.get())
+						&& !shouldSubmitFallbackPose && newPoseValid)
 					{
 						// In fallback-only mode we keep the native pose while it is healthy and
 						// only apply our configured calibration offset until we need to take over.
@@ -503,9 +501,7 @@ DriverLog("Controller: %s, Button: %s, value: %s",
 						}
 					}
 
-					auto controllerMode = config.handPose.controllerMode;
-					if (controller->shouldPossess()
-						&& controllerMode == ControllerMode::HookedControllerMode)
+					if (HOL::HandOfLesser::Current->shouldPossessInput(controller.get()))
 					{
 						if (config.steamvr.blockControllerInputWhileHandTracking)
 						{
@@ -571,9 +567,7 @@ DriverLog("Controller: %s, Button: %s, value: %s",
 					}
 				}
 
-				auto controllerMode = config.handPose.controllerMode;
-				if (controller->shouldPossess()
-					&& controllerMode == ControllerMode::HookedControllerMode)
+				if (HOL::HandOfLesser::Current->shouldPossessInput(controller.get()))
 				{
 					if (config.steamvr.blockControllerInputWhileHandTracking)
 					{
@@ -622,9 +616,7 @@ DriverLog("Controller: %s, Button: %s, value: %s",
 				// data we want SteamVR to see. Swallow the native controller's own skeleton updates
 				// so they cannot overwrite the possessed hand-tracking skeleton on the same handle.
 				if (submittingSkeletalInput
-					&& HandOfLesser::Current->Config.handPose.controllerMode
-						   == ControllerMode::HookedControllerMode
-					&& HandOfLesser::Current->shouldPossess(controller.get()))
+					&& HandOfLesser::Current->shouldPossessInput(controller.get()))
 				{
 					return vr::VRInputError_None;
 				}

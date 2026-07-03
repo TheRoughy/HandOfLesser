@@ -203,33 +203,24 @@ namespace HOL
 	void HookedController::SubmitPose()
 	{
 		auto& config = HOL::HandOfLesser::Current->Config;
-		bool fallbackOnlyActive = config.handPose.fallbackOnly && !HOL::HandOfLesser::Runtime.isOVR;
 
-		if (HOL::HandOfLesser::Current->shouldPossess(this))
+		if (!HOL::HandOfLesser::Current->shouldPossessPose(this))
 		{
-			bool originalSubmitStale
-				= this->framesSinceLastPoseUpdate > PoseStaleThresholdFrames;
-			bool shouldSubmitFallbackPose
-				= !fallbackOnlyActive || !this->mLastOriginalPoseValid || originalSubmitStale;
-
-			if (!shouldSubmitFallbackPose)
-			{
-				return;
-			}
-
-			// In this state the native controller pose is no longer good enough, so call the
-			// original function ourselves with our replacement pose instead.
-
-			// If we are submitting a stale pose to lock it in place, we must jitter it
-			// because vrchat is stupid and ignores all the status information steamvr provides.
-			const auto& pose
-				= (this->mLastTransformPayload.valid || !config.steamvr.jitterLastPoseOnTrackingLoss)
-					  ? this->mLastPose
-					  : HOL::ControllerCommon::addJitter(this->mLastPose);
-
-			HOL::hooks::TrackedDevicePoseUpdated::FunctionHook.originalFunc(
-				this->mHookedHost, this->mDeviceId, pose, sizeof(vr::DriverPose_t));
+			return;
 		}
+
+		// In this state the native controller pose is no longer good enough, so call the
+		// original function ourselves with our replacement pose instead.
+
+		// If we are submitting a stale pose to lock it in place, we must jitter it
+		// because vrchat is stupid and ignores all the status information steamvr provides.
+		const auto& pose
+			= (this->mLastTransformPayload.valid || !config.steamvr.jitterLastPoseOnTrackingLoss)
+				  ? this->mLastPose
+				  : HOL::ControllerCommon::addJitter(this->mLastPose);
+
+		HOL::hooks::TrackedDevicePoseUpdated::FunctionHook.originalFunc(
+			this->mHookedHost, this->mDeviceId, pose, sizeof(vr::DriverPose_t));
 	}
 
 	bool HookedController::isHeld()
@@ -300,17 +291,6 @@ namespace HOL
 	}
 
 	// Assuming other external conditions also say it should.
-	bool HookedController::shouldPossess()
-	{
-		// Only controllers should ever be possessed - never HMD or other tracked devices
-		if (mDeviceClass != vr::TrackedDeviceClass_Controller)
-		{
-			return false;
-		}
-
-		return HOL::HandOfLesser::Current->shouldPossess(this);
-	}
-
 	void HookedController::setSide(HandSide side)
 	{
 		this->mSide = side;
@@ -372,6 +352,12 @@ namespace HOL
 		{
 			this->mHasHadValidOriginalPose = true;
 		}
+	}
+
+	bool HookedController::nativePoseHealthy() const
+	{
+		return this->mLastOriginalPoseValid
+			   && this->framesSinceLastPoseUpdate <= PoseStaleThresholdFrames;
 	}
 
 	Eigen::Vector3f HookedController::getWorldPosition()

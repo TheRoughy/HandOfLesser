@@ -34,8 +34,9 @@ namespace HOL
 
 		void removeDuplicateDevices();
 
-		bool shouldPossess(uint32_t deviceId);
-		bool shouldPossess(HookedController* controller);
+		bool shouldPossessInput(uint32_t deviceId);
+		bool shouldPossessInput(HookedController* controller);
+		bool shouldPossessPose(HookedController* controller);
 
 		bool shouldEmulateControllers();
 		static HandOfLesser* Current; // Time to commit sins

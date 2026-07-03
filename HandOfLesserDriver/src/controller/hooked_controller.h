@@ -42,13 +42,13 @@ namespace HOL
 		void FlushDisconnectState();
 
 		bool canPossess();
-		bool shouldPossess();
 
 		void setSide(HandSide side);
 		HandSide getSide();
 		void updateSideFromRole();
 
 		void setLastOriginalPoseState(bool valid);
+		bool nativePoseHealthy() const;
 		bool isHeld();
 		Eigen::Vector3f getWorldPosition();
 

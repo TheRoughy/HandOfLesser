@@ -688,18 +688,18 @@ namespace HOL
 		refreshPreferredHookedControllers();
 	}
 
-	bool HandOfLesser::shouldPossess(uint32_t deviceId)
+	bool HandOfLesser::shouldPossessInput(uint32_t deviceId)
 	{
 		if (HandOfLesser::Current->Config.handPose.controllerMode
 			== ControllerMode::HookedControllerMode)
 		{
-			return shouldPossess(getHookedControllerByDeviceId(deviceId).get());
+			return shouldPossessInput(getHookedControllerByDeviceId(deviceId).get());
 		}
 
 		return false;
 	}
 
-	bool HandOfLesser::shouldPossess(HookedController* controller)
+	bool HandOfLesser::shouldPossessInput(HookedController* controller)
 	{
 		if (HandOfLesser::Current->Config.handPose.controllerMode
 			!= ControllerMode::HookedControllerMode)
@@ -720,6 +720,17 @@ namespace HOL
 		}
 
 		return true;
+	}
+
+	bool HandOfLesser::shouldPossessPose(HookedController* controller)
+	{
+		if (!shouldPossessInput(controller))
+		{
+			return false;
+		}
+
+		const bool fallbackOnlyActive = Config.handPose.fallbackOnly && !Runtime.isOVR;
+		return !fallbackOnlyActive || !controller->nativePoseHealthy();
 	}
 
 	bool HandOfLesser::shouldEmulateControllers()
@@ -1316,8 +1327,8 @@ namespace HOL
 					return nullptr;
 				}
 
-				// Not active if we shouldn't possess it
-				if (!shouldPossess(hookedControllerOwner.get()))
+				// Not active if HandOfLesser should not own the hooked controller's input.
+				if (!shouldPossessInput(hookedControllerOwner.get()))
 				{
 					return nullptr;
 				}
