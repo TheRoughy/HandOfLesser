@@ -277,19 +277,6 @@ namespace HOL
 		return mLastHeldState;
 	}
 
-	// Can, not should.
-	bool HookedController::canPossess()
-	{
-		// Only controllers should ever be possessed - never HMD or other tracked devices
-		if (mDeviceClass != vr::TrackedDeviceClass_Controller)
-		{
-			return false;
-		}
-
-		// Whether or not the pose is valid pretty much.
-		return this->mLastTransformPayload.valid;
-	}
-
 	// Assuming other external conditions also say it should.
 	void HookedController::setSide(HandSide side)
 	{

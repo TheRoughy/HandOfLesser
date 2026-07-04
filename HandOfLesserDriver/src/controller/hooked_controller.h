@@ -41,8 +41,6 @@ namespace HOL
 		void sendDisconnectState();
 		void FlushDisconnectState();
 
-		bool canPossess();
-
 		void setSide(HandSide side);
 		HandSide getSide();
 		void updateSideFromRole();

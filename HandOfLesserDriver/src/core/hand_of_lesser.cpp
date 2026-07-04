@@ -589,18 +589,16 @@ namespace HOL
 
 			if (forceUpdate || emulationMode)
 			{
-				bool handTrackingPrimary = emulationMode && isHandTrackingPrimary(side);
+				const bool emulatedHandTrackingPrimary = emulationMode && isHandTrackingPrimary(side);
 
-				// TODO: Add bool to determine if we should suppress existing controllers
 				for (const auto& hooked : getHookedControllers(side))
 				{
-					// This will set suppressed state and a disconnect event depending on the
-					// existing suppression state, meaning it may not trigger if we've been
-					// submitting poses on its behalf already.
-					// Don't unsuppress if the controller is acting as a tracker.
 					if (!hooked->isActingAsTracker())
 					{
-						hooked->setSuppressed(handTrackingPrimary);
+						const bool suppress = emulationMode ? emulatedHandTrackingPrimary
+														   : shouldSuppressHookedController(
+																 hooked.get());
+						hooked->setSuppressed(suppress);
 					}
 				}
 
@@ -608,7 +606,7 @@ namespace HOL
 				// and we can tell whether or not it was active when we disable it.
 				if (auto emulated = getEmulatedController(side))
 				{
-					emulated->setConnectedState(handTrackingPrimary);
+					emulated->setConnectedState(emulatedHandTrackingPrimary);
 				}
 
 
@@ -781,12 +779,17 @@ namespace HOL
 		HookedController* recoveryController
 			= recoveryControllerOwner ? recoveryControllerOwner.get() : controller;
 
-		bool canPoss = controller->canPossess();
+		HandSide side = controller->getSide();
+		const bool hasCurrentHandPose = side >= 0 && side < HOL::HandSide_MAX
+										&& mHasHandTransform[side]
+										&& mLastHandTransforms[side].valid;
+		const bool currentHandTracked
+			= hasCurrentHandPose && mLastHandTransforms[side].tracked;
 		bool recoveryPoseValid = recoveryController->mLastOriginalPoseValid;
 		bool recoveryPoseFresh = recoveryPoseValid
 								 && recoveryController->framesSinceLastPoseUpdate
 										<= HookedController::PoseStaleThresholdFrames;
-		if (!recoveryPoseFresh && canPoss)
+		if (!recoveryPoseFresh && hasCurrentHandPose)
 		{
 			controller->mValidWhileOriginalInvalid = true;
 		}
@@ -796,10 +799,9 @@ namespace HOL
 			controller->mValidWhileOriginalInvalid = false;
 		}
 
-		bool shouldUseHandTracking
-			= controller->mLastTransformPayload.tracked
-			  || (canPoss && !recoveryPoseFresh)
-			  || controller->mValidWhileOriginalInvalid;
+		bool shouldUseHandTracking = currentHandTracked
+									 || (hasCurrentHandPose && !recoveryPoseFresh)
+									 || controller->mValidWhileOriginalInvalid;
 
 		// Must remain in new target state for x frames before actually changing
 		if (shouldUseHandTracking == controller->mHandTrackingTargetState)
@@ -1123,6 +1125,18 @@ namespace HOL
 					bestScore = score;
 				}
 			}
+		}
+
+		auto previousController = mPreferredHookedControllers[side].load();
+		if (previousController != bestController)
+		{
+			const char* sideName = side == HandSide::LeftHand ? "left" : "right";
+			DriverLog("Preferred hooked %s controller changed: %s -> %s (tracking level %d)",
+					  sideName,
+					  previousController ? previousController->serial.c_str() : "(none)",
+					  bestController ? bestController->serial.c_str() : "(none)",
+					  bestController ? static_cast<int>(bestController->mSkeletonTrackingLevel)
+									 : -1);
 		}
 
 		mPreferredHookedControllers[side].store(bestController);
