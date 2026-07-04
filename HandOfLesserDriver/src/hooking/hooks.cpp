@@ -475,42 +475,40 @@ namespace HOL::hooks
 						_this, ulComponent, false, fTimeOffset);
 				}
 
-				// For the time being allow system gesture
-				if (inputHandle.inputPath.find("system") == std::string::npos)
+
+				/*
+				DriverLog("Controller: %s, Button: %s, value: %s",
+				controller->serial.c_str(),
+				inputHandle.inputPath.c_str(),
+				bNewValue ? "True" : "False");
+				*/
+
+				// Block input when acting as tracker
+				if (controller->isActingAsTracker())
 				{
-					/*
-DriverLog("Controller: %s, Button: %s, value: %s",
-			controller->serial.c_str(),
-			inputHandle.inputPath.c_str(),
-			bNewValue ? "True" : "False");
-			*/
-					// Block input when acting as tracker
-					if (controller->isActingAsTracker())
+					if (config.steamvr.blockControllerInputWhileHandTracking)
 					{
-						if (config.steamvr.blockControllerInputWhileHandTracking)
-						{
-							return vr::EVRInputError::VRInputError_None;
-						}
+						return vr::EVRInputError::VRInputError_None;
 					}
-
-					if (HOL::HandOfLesser::Current->shouldSuppressHookedController(controller.get()))
-					{
-						if (config.steamvr.blockControllerInputWhileHandTracking)
-						{
-							return vr::EVRInputError::VRInputError_None;
-						}
-					}
-
-					if (HOL::HandOfLesser::Current->shouldPossessInput(controller.get()))
-					{
-						if (config.steamvr.blockControllerInputWhileHandTracking)
-						{
-							// DriverLog("Blocked!");
-							return vr::EVRInputError::VRInputError_None;
-						}
-					}
-
 				}
+
+				if (HOL::HandOfLesser::Current->shouldSuppressHookedController(controller.get()))
+				{
+					if (config.steamvr.blockControllerInputWhileHandTracking)
+					{
+						return vr::EVRInputError::VRInputError_None;
+					}
+				}
+
+				if (HOL::HandOfLesser::Current->shouldPossessInput(controller.get()))
+				{
+					if (config.steamvr.blockControllerInputWhileHandTracking)
+					{
+						// DriverLog("Blocked!");
+						return vr::EVRInputError::VRInputError_None;
+					}
+				}
+
 			}
 			else
 			{
