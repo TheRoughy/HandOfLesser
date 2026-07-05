@@ -598,7 +598,13 @@ namespace HOL
 						const bool suppress = emulationMode ? emulatedHandTrackingPrimary
 														   : shouldSuppressHookedController(
 																 hooked.get());
+						const bool wasSuppressed = hooked->isSuppressed();
 						hooked->setSuppressed(suppress);
+						if (emulationMode && forceUpdate && suppress && wasSuppressed
+							&& Config.steamvr.disableOtherControllersWhileHandTracking)
+						{
+							hooked->sendDisconnectState();
+						}
 					}
 				}
 
