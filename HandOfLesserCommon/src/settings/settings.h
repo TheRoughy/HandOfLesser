@@ -112,7 +112,7 @@ namespace HOL
 		struct GeneralSettings
 		{
 			int motionPredictionMS = 15; // Ignored by VD, reasonable for Oculus
-			int updateIntervalMS = 1;
+			int updateIntervalMS = 5;
 			bool forceInactive = false;
 			int minTrackedJointsForQuality
 				= 26; // Minimum tracked joints to consider tracking valid
@@ -313,11 +313,11 @@ namespace HOL
 
 		struct SteamVRPoseSmoothingSettings
 		{
-			float steamPoseTimeOffsetMS = 0.0f;
+			float steamPoseTimeOffsetMS = 15.0f;
 			float positionSmoothingMS = 40.0f;
 			float rotationSmoothingMS = 0.0f;
 			float linearVelocityMultiplier = 1.0f;
-			float angularVelocityMultiplier = 0.0f;
+			float angularVelocityMultiplier = 0.1f;
 		};
 
 		inline SteamVRPoseSmoothingSettings defaultSteamVRPoseSmoothingSettings(bool vdxr)
@@ -328,7 +328,8 @@ namespace HOL
 				// OpenXR should return pre-predicted poses. We don't know the display time 
 				// so this is not ideal and having SteamVR apply additional prediction causes stutter.
 				// VDXR incorrectly provides poses with no prediction, so we can let SteamVR handle it.
-				settings.linearVelocityMultiplier = 0.0f;
+				// After messing around I've ended up with the same default values for these,
+				// but we'll keep the settings separated, as they do behave differently.
 			}
 			return settings;
 		}
