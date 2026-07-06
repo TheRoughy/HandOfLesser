@@ -1435,6 +1435,11 @@ void HOL::UserInterface::buildSteamVR()
 									  1.0f,
 									  5.0f,
 									  "%.0f");
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip("Positive is future, negative is past. Higher value will be smoother "
+						   "but less responsive.");
+	}
 	syncSettings |= ImGui::InputFloat("Position smoothing (ms)",
 									  &Config.steamvr.poseSmoothing.positionSmoothingMS,
 									  1.0f,
@@ -1446,6 +1451,10 @@ void HOL::UserInterface::buildSteamVR()
 									  5.0f,
 									  "%.0f");
 	syncSettings |= ImGui::Checkbox("Trigger stabilization", &Config.steamvr.triggerStabilization);
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip("Apply temporary stabilization on trigger input.");
+	}
 	syncSettings |= ImGui::InputFloat("Trigger stabilization amount (ms)",
 									  &Config.steamvr.triggerStabilizationSmoothingMS,
 									  10.0f,
@@ -1461,17 +1470,30 @@ void HOL::UserInterface::buildSteamVR()
 									  10.0f,
 									  50.0f,
 									  "%.0f");
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip("Blend duration when transitioning from body tracking to hand tracking");
+	}
 
 	syncSettings |= ImGui::InputFloat("Linear Velocity multiplier",
 									  &Config.steamvr.poseSmoothing.linearVelocityMultiplier,
 									  0.05f,
 									  0.1f,
 									  "%.3f");
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip("SteamVR uses velocity for pose prediction");
+	}
 	syncSettings |= ImGui::InputFloat("Angular Velocity multiplier",
 									  &Config.steamvr.poseSmoothing.angularVelocityMultiplier,
 									  0.05f,
 									  0.1f,
 									  "%.3f");
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip("SteamVR uses velocity for pose prediction. Predicting rotation usually "
+						   "reuslts in rubberbanding, so keep it near or at zero.");
+	}
 
 	if (rightAlignButton("Reset##SteamVRGeneral"))
 	{
@@ -1495,6 +1517,11 @@ void HOL::UserInterface::buildSteamVR()
 
 	syncSettings |= ImGui::InputFloat(
 		"Length multiplier", &Config.skeletal.jointLengthMultiplier, 0.01f, 0.1f, "%.3f");
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip(
+			"Stretch finger joint length; they end up a bit short with OpenXR data.");
+	}
 	ImGui::SameLine();
 	if (rightAlignButton("Reset##Skeletal"))
 	{
@@ -2439,12 +2466,22 @@ void HOL::UserInterface::buildTracking()
 
 	ImGui::SeparatorText("Runtime");
 	ImGui::InputInt("Prediction (ms)", &Config.general.motionPredictionMS);
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip(
+			"Amount of prediction to request from the OpenXR runtime. Does not apply to VDXR.");
+	}
 	if (ImGui::InputInt("Update Interval (ms)", &Config.general.updateIntervalMS))
 	{
 		if (Config.general.updateIntervalMS < 1)
 		{
 			Config.general.updateIntervalMS = 1;
 		}
+	}
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip(
+			"Update frequency. Data updates at 10-16ms. Too low or too high causes stutter.");
 	}
 
 	ImGui::Checkbox("Force inactive", &Config.general.forceInactive);
