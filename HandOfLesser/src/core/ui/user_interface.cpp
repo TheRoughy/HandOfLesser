@@ -588,13 +588,11 @@ void HOL::UserInterface::buildBindings()
 	};
 
 	ImGui::BeginChild("BindingsWindow",
-					   ImVec2(scaleSize(PanelWidth), 0),
+					   ImVec2(scaleSize(PanelWidth), 0),	
 					   ImGuiChildFlags_AutoResizeY);
 
 	ImGui::SeparatorText("Gesture Bindings");
-	ImGui::TextWrapped(
-		"Configure which hand gesture maps to which controller input.\n"
-		"Changes apply immediately.");
+	ImGui::TextWrapped("Configure which hand gesture maps to which controller input.");
 
 	ImGui::SeparatorText("Joystick Reference");
 
@@ -2145,6 +2143,36 @@ void HOL::UserInterface::buildMain()
 		showWrappedTooltip("Restart to switch runtimes.");
 	}
 
+	ImGui::SeparatorText("Runtime");
+	ImGui::InputInt("Prediction (ms)", &Config.general.motionPredictionMS);
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip(
+			"Amount of prediction to request from the OpenXR runtime. Does not apply to VDXR.");
+	}
+	if (ImGui::InputInt("Update Interval (ms)", &Config.general.updateIntervalMS))
+	{
+		if (Config.general.updateIntervalMS < 1)
+		{
+			Config.general.updateIntervalMS = 1;
+		}
+	}
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip(
+			"Update frequency. Data updates at 10-16ms. Too low or too high causes stutter.");
+	}
+
+	ImGui::Checkbox("Force inactive", &Config.general.forceInactive);
+	ImGui::SameLine();
+	if (rightAlignButton("Reset##General"))
+	{
+		HOL::settings::GeneralSettings defaults;
+		Config.general.motionPredictionMS = defaults.motionPredictionMS;
+		Config.general.updateIntervalMS = defaults.updateIntervalMS;
+		Config.general.forceInactive = defaults.forceInactive;
+	}
+
 	//////////////////
 	// Mode
 	////////////////////
@@ -2463,36 +2491,6 @@ void HOL::UserInterface::buildTracking()
 {
 	ImGui::BeginChild(
 		"TrackingWindow", ImVec2(scaleSize(PanelWidth), 0), ImGuiChildFlags_AutoResizeY);
-
-	ImGui::SeparatorText("Runtime");
-	ImGui::InputInt("Prediction (ms)", &Config.general.motionPredictionMS);
-	if (ImGui::IsItemHovered())
-	{
-		showWrappedTooltip(
-			"Amount of prediction to request from the OpenXR runtime. Does not apply to VDXR.");
-	}
-	if (ImGui::InputInt("Update Interval (ms)", &Config.general.updateIntervalMS))
-	{
-		if (Config.general.updateIntervalMS < 1)
-		{
-			Config.general.updateIntervalMS = 1;
-		}
-	}
-	if (ImGui::IsItemHovered())
-	{
-		showWrappedTooltip(
-			"Update frequency. Data updates at 10-16ms. Too low or too high causes stutter.");
-	}
-
-	ImGui::Checkbox("Force inactive", &Config.general.forceInactive);
-	ImGui::SameLine();
-	if (rightAlignButton("Reset##General"))
-	{
-		HOL::settings::GeneralSettings defaults;
-		Config.general.motionPredictionMS = defaults.motionPredictionMS;
-		Config.general.updateIntervalMS = defaults.updateIntervalMS;
-		Config.general.forceInactive = defaults.forceInactive;
-	}
 
 	ImGui::SeparatorText("Offset");
 
@@ -2814,7 +2812,7 @@ void UserInterface::buildInterface()
 			buildMain();
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Tracking"))
+		if (ImGui::BeginTabItem("Hands"))
 		{
 			buildTracking();
 			ImGui::EndTabItem();
