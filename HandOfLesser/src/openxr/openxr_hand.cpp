@@ -349,7 +349,7 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 	
 
 
-	if (HOL::Config.general.forceInactive)
+	if (HOL::Config.handPose.forceInactive)
 	{
 		this->handPose.poseValid = false;
 		this->handPose.active = false;

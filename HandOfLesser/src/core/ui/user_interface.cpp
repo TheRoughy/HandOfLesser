@@ -2163,14 +2163,11 @@ void HOL::UserInterface::buildMain()
 			"Update frequency. Data updates at 10-16ms. Too low or too high causes stutter.");
 	}
 
-	ImGui::Checkbox("Force inactive", &Config.general.forceInactive);
-	ImGui::SameLine();
 	if (rightAlignButton("Reset##General"))
 	{
 		HOL::settings::GeneralSettings defaults;
 		Config.general.motionPredictionMS = defaults.motionPredictionMS;
 		Config.general.updateIntervalMS = defaults.updateIntervalMS;
-		Config.general.forceInactive = defaults.forceInactive;
 	}
 
 	//////////////////
@@ -2492,12 +2489,13 @@ void HOL::UserInterface::buildTracking()
 	ImGui::BeginChild(
 		"TrackingWindow", ImVec2(scaleSize(PanelWidth), 0), ImGuiChildFlags_AutoResizeY);
 
-	ImGui::SeparatorText("Offset");
+	ImGui::SeparatorText("Main");
 
 	if (ImGui::Checkbox("Apply base offset", &Config.handPose.applyBaseOffset))
 	{
 		HOL::HandOfLesserCore::Current->syncSettings();
 	}
+	ImGui::Checkbox("Force inactive", &Config.handPose.forceInactive);
 
 	ImGui::SeparatorText("Offset preset");
 

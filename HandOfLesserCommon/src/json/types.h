@@ -303,7 +303,6 @@ namespace HOL
 				 {"triggerStabilizationSmoothingMS", settings.triggerStabilizationSmoothingMS},
 				 {"triggerStabilizationFalloffMS", settings.triggerStabilizationFalloffMS},
 				 {"handTrackingResumeBlendMS", settings.handTrackingResumeBlendMS},
-				 {"forceInactive", settings.forceInactive},
 				 {"jitterLastPoseOnTrackingLoss", settings.jitterLastPoseOnTrackingLoss}};
 		}
 
@@ -336,7 +335,6 @@ namespace HOL
 				j, "triggerStabilizationFalloffMS", settings.triggerStabilizationFalloffMS);
 			nlohmann::get_to_if_present(
 				j, "handTrackingResumeBlendMS", settings.handTrackingResumeBlendMS);
-			nlohmann::get_to_if_present(j, "forceInactive", settings.forceInactive);
 			nlohmann::get_to_if_present(
 				j, "jitterLastPoseOnTrackingLoss", settings.jitterLastPoseOnTrackingLoss);
 		}

@@ -113,7 +113,6 @@ namespace HOL
 		{
 			int motionPredictionMS = 15; // Ignored by VD, reasonable for Oculus
 			int updateIntervalMS = 5;
-			bool forceInactive = false;
 			int minTrackedJointsForQuality
 				= 26; // Minimum tracked joints to consider tracking valid
 		};
@@ -125,6 +124,7 @@ namespace HOL
 			HOL::ControllerMode controllerMode = HOL::ControllerMode::NoControllerMode;
 			bool fallbackOnly = false;
 			bool applyBaseOffset = true;
+			bool forceInactive = false;
 			HOL::EmulatedControllerProfile emulatedControllerProfile
 				= HOL::EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch;
 			Eigen::Vector3f orientationOffset = Eigen::Vector3f(0, 0, 0);
@@ -352,7 +352,6 @@ namespace HOL
 			float triggerStabilizationSmoothingMS = 200.0f;
 			float triggerStabilizationFalloffMS = 500.0f;
 			float handTrackingResumeBlendMS = 500.0f;
-			bool forceInactive = false;
 			bool jitterLastPoseOnTrackingLoss = true;
 		};
 
