@@ -17,6 +17,9 @@
 	!define PRODUCT_NAME "HandOfLesser"
 	!define APP_REG_KEY "Software\${COMPANY_NAME}\${PRODUCT_NAME}"
 	!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${COMPANY_NAME} ${PRODUCT_NAME}"
+	!ifndef VC_REDIST_EXE
+	!define VC_REDIST_EXE "build_cache\vc_redist.x64.exe"
+	!endif
 
 	Name "${PRODUCT_NAME}"
 	OutFile "distribution\HandOfLesserInstaller.exe"
@@ -123,6 +126,13 @@ Section "Install" SecInstall
 
 	foundvrpathreg:
 	DetailPrint "Using vrpathreg: $vrPathReg"
+
+	InitPluginsDir
+	SetOutPath "$PLUGINSDIR"
+	File "${VC_REDIST_EXE}"
+	DetailPrint "Installing Microsoft Visual C++ Redistributable..."
+	ExecWait '"$PLUGINSDIR\vc_redist.x64.exe" /install /quiet /norestart' $0
+	DetailPrint "VC++ Redistributable installer exit code: $0"
 
 	SetOutPath "$INSTDIR"
 	File "LICENSE.md"
