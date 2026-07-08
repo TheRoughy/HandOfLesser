@@ -58,6 +58,14 @@ namespace HOL
 		ControllerMode_MAX
 	};
 
+	enum PossessionBehavior
+	{
+		PossessionBehavior_Full,
+		PossessionBehavior_Fallback,
+		PossessionBehavior_Input,
+		PossessionBehavior_MAX
+	};
+
 	enum class BodyTrackerRole : int
 	{
 		Hips = 0,

@@ -122,7 +122,8 @@ namespace HOL
 			// NoControllerMode should always be the default so the driver does nothing
 			// until the app connects.
 			HOL::ControllerMode controllerMode = HOL::ControllerMode::NoControllerMode;
-			bool fallbackOnly = false;
+			HOL::PossessionBehavior possessionBehavior
+				= HOL::PossessionBehavior::PossessionBehavior_Full;
 			bool applyBaseOffset = true;
 			bool forceInactive = false;
 			HOL::EmulatedControllerProfile emulatedControllerProfile

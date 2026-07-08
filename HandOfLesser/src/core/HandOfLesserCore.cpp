@@ -586,8 +586,7 @@ void HOL::HandOfLesserCore::sendOscData()
 void HandOfLesserCore::sendUpdate()
 {
 
-	if (!state::Runtime.isSteamVR
-		&& Config.handPose.controllerMode != ControllerMode::NoControllerMode)
+	if (Config.handPose.controllerMode != ControllerMode::NoControllerMode)
 	{
 		for (int i = 0; i < HandSide_MAX; i++)
 		{

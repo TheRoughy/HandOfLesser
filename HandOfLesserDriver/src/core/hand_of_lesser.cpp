@@ -21,6 +21,26 @@ namespace HOL
 	HOL::state::TrackingState HandOfLesser::Tracking;
 	HOL::state::RuntimeState HandOfLesser::Runtime;
 
+	static void EnforceRuntimeRestrictions(settings::HandOfLesserSettings& settings)
+	{
+		if (!HandOfLesser::Runtime.isSteamVR)
+		{
+			return;
+		}
+
+		// We can't submit poses to SteamVR when also receiving data from it,
+		// so you can only possess with input only.
+		if (settings.handPose.controllerMode == ControllerMode::EmulateControllerMode)
+		{
+			settings.handPose.controllerMode = ControllerMode::NoControllerMode;
+		}
+
+		if (settings.handPose.controllerMode == ControllerMode::HookedControllerMode)
+		{
+			settings.handPose.possessionBehavior = PossessionBehavior_Input;
+		}
+	}
+
 	HandOfLesser::HandOfLesser()
 	{
 		mHookedControllers.store(std::make_shared<const HookedControllerList>());
@@ -102,6 +122,10 @@ namespace HOL
 					mLastHandTransforms[sideIndex] = payload;
 					mHasHandTransform[sideIndex] = payload.valid;
 
+					const bool inputOnlyHookedMode
+						= Config.handPose.controllerMode == ControllerMode::HookedControllerMode
+						  && Config.handPose.possessionBehavior == PossessionBehavior_Input;
+
 					if (Config.handPose.controllerMode != ControllerMode::HookedControllerMode)
 					{
 						if (auto hooked = getHookedController(payload.side))
@@ -113,7 +137,7 @@ namespace HOL
 					std::shared_ptr<HookedController> hookedControllerOwner;
 					GenericControllerInterface* controller
 						= this->GetActiveController(payload.side, hookedControllerOwner);
-					if (controller != nullptr)
+					if (controller != nullptr && !inputOnlyHookedMode)
 					{
 						controller->UpdatePose(&payload);
 						controller->SubmitPose();
@@ -139,11 +163,7 @@ namespace HOL
 							nativePacket.payload, nativePacket.payload + nativePacket.payloadSize);
 						HandOfLesser::Config = j.get<HOL::settings::HandOfLesserSettings>();
 						persistAutoLaunchSetting();
-						if (Runtime.isSteamVR)
-						{
-							HandOfLesser::Config.handPose.controllerMode
-								= ControllerMode::NoControllerMode;
-						}
+						EnforceRuntimeRestrictions(HandOfLesser::Config);
 
 						// Handle any configuration changes
 						handleConfigurationChange(oldSettings);
@@ -259,14 +279,6 @@ namespace HOL
 
 					Tracking = payload.tracking;
 					Runtime = payload.runtime;
-
-					if (Runtime.isSteamVR
-						&& Config.handPose.controllerMode != ControllerMode::NoControllerMode)
-					{
-						HOL::settings::HandOfLesserSettings oldSettings = Config;
-						Config.handPose.controllerMode = ControllerMode::NoControllerMode;
-						handleConfigurationChange(oldSettings);
-					}
 
 					updateControllerConnectionStates();
 					break;
@@ -723,6 +735,11 @@ namespace HOL
 			return false;
 		}
 
+		if (Runtime.isSteamVR && !controller->nativePoseHealthy())
+		{
+			return false;
+		}
+
 		return true;
 	}
 
@@ -733,7 +750,13 @@ namespace HOL
 			return false;
 		}
 
-		const bool fallbackOnlyActive = Config.handPose.fallbackOnly && !Runtime.isOVR;
+		if (Config.handPose.possessionBehavior == PossessionBehavior_Input)
+		{
+			return false;
+		}
+
+		const bool fallbackOnlyActive
+			= Config.handPose.possessionBehavior == PossessionBehavior_Fallback;
 		return !fallbackOnlyActive || !controller->nativePoseHealthy();
 	}
 
@@ -1103,7 +1126,8 @@ namespace HOL
 		}
 
 		std::shared_ptr<HookedController> bestController;
-		std::string preferredSerial = getPreferredHookedControllerSerial(side);
+		std::string preferredSerial
+			= Runtime.isSteamVR ? "" : getPreferredHookedControllerSerial(side);
 		if (!preferredSerial.empty())
 		{
 			// Explicit user selection always wins when that serial is currently available.
@@ -1124,6 +1148,11 @@ namespace HOL
 			for (const auto& controller : controllers)
 			{
 				int score = getHookedControllerSelectionScore(controller.get());
+				if (score == std::numeric_limits<int>::lowest())
+				{
+					continue;
+				}
+
 				if (bestController == nullptr || score > bestScore
 					|| (score == bestScore && controller->serial < bestController->serial))
 				{
@@ -1215,6 +1244,22 @@ namespace HOL
 		}
 
 		int score = 0;
+
+		if (Runtime.isSteamVR)
+		{
+			//SteamVR runtime should only be used if we are using Steam Link.
+			// Since we cannot submit poses, we should only possess the existing hand tracking controllers.
+			// We only do tihs for the purpose of possessing input.
+			if (!controller->nativePoseHealthy())
+			{
+				return std::numeric_limits<int>::lowest();
+			}
+
+			if (controller->mSkeletonTrackingLevel == vr::VRSkeletalTracking_Full)
+			{
+				score += 1000;
+			}
+		}
 
 		// Controllers that the user turned into trackers should not also become the primary
 		// possessed controller.

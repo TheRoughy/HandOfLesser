@@ -334,10 +334,17 @@ namespace HOL
 
 	void HookedController::setLastOriginalPoseState(bool valid)
 	{
+		const bool validityChanged = this->mLastOriginalPoseValid != valid;
+		const bool firstValidPose = valid && !this->mHasHadValidOriginalPose;
 		this->mLastOriginalPoseValid = valid;
 		if (valid)
 		{
 			this->mHasHadValidOriginalPose = true;
+		}
+
+		if (firstValidPose || (HOL::HandOfLesser::Runtime.isSteamVR && validityChanged))
+		{
+			HOL::HandOfLesser::Current->refreshPreferredHookedControllers();
 		}
 	}
 

@@ -2224,17 +2224,12 @@ void HOL::UserInterface::buildMain()
 		   {"Emulate separate controller", HOL::ControllerMode::EmulateControllerMode},
 		   {"Possess existing controller", HOL::ControllerMode::HookedControllerMode}};
 
-	bool steamVrControllerModeDisabled = HOL::state::Runtime.isSteamVR;
-	int displayedControllerMode = steamVrControllerModeDisabled
-		? HOL::ControllerMode::NoControllerMode
-		: HOL::Config.handPose.controllerMode;
-
-	if (steamVrControllerModeDisabled)
+	bool steamVrRuntime = HOL::state::Runtime.isSteamVR;
+	int displayedControllerMode = HOL::Config.handPose.controllerMode;
+	if (steamVrRuntime && displayedControllerMode == HOL::ControllerMode::EmulateControllerMode)
 	{
-		ImGui::BeginDisabled();
+		displayedControllerMode = HOL::ControllerMode::NoControllerMode;
 	}
-
-	ImVec2 handTrackingModeStart = ImGui::GetCursorScreenPos();
 
 	ImGui::BeginChild("HandTrackingModeLeft",
 					  ImVec2(ImGui::GetContentRegionAvail().x * 0.5f, 0),
@@ -2242,20 +2237,44 @@ void HOL::UserInterface::buildMain()
 
 	for (const auto& buttonContent : modeRadioButtons)
 	{
+		const HOL::ControllerMode buttonMode = std::get<1>(buttonContent);
+		const bool modeDisabled
+			= steamVrRuntime && buttonMode == HOL::ControllerMode::EmulateControllerMode;
+		if (modeDisabled)
+		{
+			ImGui::BeginDisabled();
+		}
+
 		if (ImGui::RadioButton(std::get<0>(buttonContent).c_str(),
 							   &displayedControllerMode,
-							   std::get<1>(buttonContent)))
+							   buttonMode))
 		{
 			HOL::Config.handPose.controllerMode
 				= static_cast<HOL::ControllerMode>(displayedControllerMode);
+			if (HOL::state::Runtime.isSteamVR
+				&& HOL::Config.handPose.controllerMode == HOL::ControllerMode::HookedControllerMode)
+			{
+				HOL::Config.handPose.possessionBehavior = HOL::PossessionBehavior_Input;
+			}
 			HOL::HandOfLesserCore::Current->syncSettings();
+		}
+
+		if (modeDisabled)
+		{
+			ImGui::EndDisabled();
 		}
 
 		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
 		{
-			if (!steamVrControllerModeDisabled)
+			if (modeDisabled)
 			{
-				switch (std::get<1>(buttonContent))
+				showWrappedTooltip(
+					"You cannot use SteamVR OpenXR data to drive SteamVR controllers; this creates "
+					"a feedback loop. You can only use Possess mode with input only.");
+			}
+			else
+			{
+				switch (buttonMode)
 				{
 					case HOL::ControllerMode::NoControllerMode:
 						showWrappedTooltip("Do nothing.");
@@ -2280,53 +2299,82 @@ void HOL::UserInterface::buildMain()
 
 	ImGui::BeginChild("HandTrackingModeRight", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY);
 
-	bool fallbackOnlyAllowed = !HOL::state::Runtime.isOVR;
-	bool fallbackOnly = fallbackOnlyAllowed ? Config.handPose.fallbackOnly : false;
+	bool hookedModeActive
+		= HOL::Config.handPose.controllerMode == HOL::ControllerMode::HookedControllerMode;
+	const bool possessionLockedBySteamVR = steamVrRuntime;
 
-	ImGui::BeginDisabled(HOL::Config.handPose.controllerMode
-							 != HOL::ControllerMode::HookedControllerMode
-						 || !fallbackOnlyAllowed
-						 || steamVrControllerModeDisabled);
+	int possessionBehavior = Config.handPose.possessionBehavior;
+	if (possessionLockedBySteamVR)
+	{
+		possessionBehavior = HOL::PossessionBehavior_Input;
+	}
+
+	ImGui::BeginDisabled(!hookedModeActive || steamVrRuntime);
 
 	drawPreferredPossessionCombo("Possess Left##PreferredPossessLeft",
 								 Config.deviceSettings.preferredLeftControllerSerial);
 	drawPreferredPossessionCombo("Possess Right##PreferredPossessRight",
 								 Config.deviceSettings.preferredRightControllerSerial);
 
-	if (ImGui::Checkbox("Fallback only", &fallbackOnly))
-	{
-		Config.handPose.fallbackOnly = fallbackOnly;
-		HOL::HandOfLesserCore::Current->syncSettings();
-	}
-	if (ImGui::IsItemHovered())
-	{
-		if (HOL::state::Runtime.isOVR)
-		{
-			showWrappedTooltip("Oculus does not provide their own hand-tracking controllers,"
-							   "so fallback is meaningless.");
-		}
-		else
-		{
-			showWrappedTooltip("Only possess if controller is not submitting a valid pose");
-		}
-	}
 	ImGui::EndDisabled();
 
-	ImGui::EndChild();
+	ImGui::BeginDisabled(!hookedModeActive || possessionLockedBySteamVR);
 
-	if (steamVrControllerModeDisabled)
+	ImVec2 possessionGroupStart = ImGui::GetCursorScreenPos();
+	ImGui::TextUnformatted("Possession");
+	if (ImGui::RadioButton("Full", &possessionBehavior, HOL::PossessionBehavior_Full))
 	{
-		ImVec2 handTrackingModeEnd = ImGui::GetItemRectMax();
-		ImGui::EndDisabled();
-
-		if (ImGui::IsMouseHoveringRect(handTrackingModeStart, handTrackingModeEnd))
+		Config.handPose.possessionBehavior
+			= static_cast<HOL::PossessionBehavior>(possessionBehavior);
+		HOL::HandOfLesserCore::Current->syncSettings();
+	}
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+	{
+		if (!possessionLockedBySteamVR)
 		{
-			showWrappedTooltip(
-				"SteamVR cannot be the source of our OpenXR data when emulating or possessing "
-				"controllers. This is because we send this data to SteamVR, which causes a "
-				"feedback loop.");
+			showWrappedTooltip("Replace controller pose and input while hand tracking is primary.");
 		}
 	}
+
+	if (ImGui::RadioButton("Fallback", &possessionBehavior, HOL::PossessionBehavior_Fallback))
+	{
+		Config.handPose.possessionBehavior
+			= static_cast<HOL::PossessionBehavior>(possessionBehavior);
+		HOL::HandOfLesserCore::Current->syncSettings();
+	}
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+	{
+		if (!possessionLockedBySteamVR)
+		{
+			showWrappedTooltip("Only possess if possessed device is not tracking.");
+		}
+	}
+
+	if (ImGui::RadioButton("Input", &possessionBehavior, HOL::PossessionBehavior_Input))
+	{
+		Config.handPose.possessionBehavior
+			= static_cast<HOL::PossessionBehavior>(possessionBehavior);
+		HOL::HandOfLesserCore::Current->syncSettings();
+	}
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+	{
+		if (!possessionLockedBySteamVR)
+		{
+			showWrappedTooltip("Possess controller input only");
+		}
+	}
+	ImVec2 possessionGroupEnd = ImGui::GetItemRectMax();
+	ImGui::EndDisabled();
+
+	if (possessionLockedBySteamVR
+		&& ImGui::IsMouseHoveringRect(possessionGroupStart, possessionGroupEnd))
+	{
+		showWrappedTooltip(
+			"You cannot use SteamVR OpenXR data to drive SteamVR controllers; this creates "
+			"a feedback loop. You can only use Possess mode with input only.");
+	}
+
+	ImGui::EndChild();
 
 	///////////////////////////
 	// Skeletal tracking level
