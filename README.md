@@ -1,55 +1,107 @@
-# HandOfLesser: a Quest hand tracking driver for SteamVR
+# HandOfLesser
 
-HandOfLesser is an experimental tool that uses OpenXR extensions to integrate OpenXR hand-tracking into SteamVR, and VRChat.
+HandOfLesser is a SteamVR driver that uses OpenXR data from VDXR or Quest Link to emulate controllers and body trackers in SteamVR, with a few extra tools for VRChat and controller input cleanup.
 
-Every contribution, whether it's a line of code, documentation, or feedback, is highly appreciated.
+## Features
 
-The project is currently a work in progress, including these instructions that have not really been updated properly.
+HandOfLesser provides:
 
-We have a discord: https://discord.gg/k9QNcvvJmF
+- Support for Quest Link ( Oculus OpenXR runtime ).
+- Customizable gesture inputs that work in any SteamVR game.
+- Hand tracking with fallback to body tracking instead of leaving hands frozen in place.
+- Per-joint hand tracking in VRChat using OSC ( VRChat's own hand tracking only transmits per-finger curl; what you see locally is not what other people are seeing )
+- Disable capacitive touch on controller buttons ( because it's a common issue )
 
-Currently no build is provided, and the below instructions are intended for developers.   
-There'll be a release with an installer eventually.
+When using Quest Link you also get:
 
-## Showcase
+- Simultaneous controller and hand tracking.
+- Use controllers as trackers while hand tracking ( Quest 2 only, Quest 3 controllers have terrible tracking )
 
-[2024-04-13 06-42-41.webm](https://github.com/Nordskog/HandOfLesser/assets/8961771/30bae3db-b8bf-4cad-a15d-c500190379ba)
+## Installation
 
+Download and run the installer from Releases. This installs the SteamVR add-on and the HandOfLesser desktop interface.
 
-Shows switching from controllers to hand-tracking.   
-Currently we use 160bits, which results in a bit of jitter. This can be improved for very little cost.    
-In the second part of the video the update rate is lowered to the same 10hz update rate ( 100ms intervals ) used by OSC to simulate what it looks like over the network.   
+Hand and body tracking must be enabled on the Quest.
 
-## Prerequisites
+### Virtual Desktop
 
-`Forward tracking data` must be enabled if using Virtual Desktop.
+Enable `Forward tracking data` inside Virtual Desktop's Quest interface. The option is in the `Streaming` section.
 
-## Build instructions
+### Quest Link
 
-Clone recursively and build with cmake. You may want to use Visual Studio 2022.
+In the Meta Horizon Link PC app, go to `Settings` > `Developer` and enable `Developer runtime features`.
 
-## Setup & Installation
+Because Quest settings are not easily accessible while in Quest Link, also enable `Automatically switch between controllers and hands` before starting Link.
 
-Register the driver with SteamVR after building the project:
+1. Launch SteamVR.
+2. Wait for the HandOfLesser desktop interface to open.
+3. If the interface steals focus from SteamVR, press the system button on the right controller to pause SteamVR.
+4. Select the SteamVR window.
+5. Press the system button again to resume SteamVR.
 
-```ps1
-vrpathreg.exe adddriver ...\output\drivers\handoflesser
-```
+## Basic Usage
 
-Copy the Unity/Assets folder to your Avatar's unity project.   
-Under Windows you will find a `Hand Of Lesser` window.    
-Hit each of the buttons in succession and assign the generated `Controller` and `Parameters` to your gesture layer.
+When the SteamVR add-on is enabled, the HandOfLesser interface opens on your desktop.
 
-## Usage
+The system default OpenXR runtime is used by default. You can explicitly select a runtime in the `Main` tab:
 
-If you are using Virtual Desktop, you can use the exe without the driver, but will be unable to offset your hands.   
-Using Quest Link the driver is required for you to be able to switch between controllers and hands.
+- Use `Auto` to keep the system default runtime.
+- Use `virtualdesktop-openxr` for Virtual Desktop.
+- Use `oculus_openxr_64` for Quest Link.
 
-To begin using HandOfLesser for hand tracking in SteamVR:
+Click `Restart` after changing the runtime.
 
-1. Connect your Quest to your PC. You can use either Quest Link or Virtual Desktop.
-2. Ensure the active OpenXR runtime is set to either Oculus or VDXR, depending on which you are using.
-3. Launch **SteamVR**.
-4. Start the `HandOfLesser.exe` tracking app.
+Set `Hand tracking mode` to `Emulate separate controller` to enable controller emulation.
 
-You WILL need to tweak all the values, primarily the Curl and Splay Centers.
+Review the default gesture inputs in the `Input` tab before continuing. You may want to customize them.
+
+Most options in the interface have tooltips explaining what they do.
+
+## VRChat OSC
+
+Install `HandOfLesser.unitypackage` in your Unity VRChat avatar project.
+
+In Unity, open the `Hand Of Lesser` window and press each button in order.
+
+This generates:
+
+- `Assets\HandOfLesser\generated\handoflesser_parameters`
+- `Assets\HandOfLesser\generated\handoflesser_controller`
+
+Assign the generated parameters to your avatar parameters, and the generated controller to your gesture layer. 
+Combining these with existing parameters and controllers is left as an exercise for the user.
+
+You can adjust finger bend and curl behavior in the `VRChat` tab of the HandOfLesser interface.
+
+## Known Issues
+
+### Virtual Desktop hand tracking is choppy
+
+Running VDXR alongside Virtual Desktop's SteamVR Add-on results in each only receiving half the data. They are aware and may eventually fix the issue. 
+
+Workaround: Disable the Virtual Desktop SteamVR add-on and launch SteamVR using the "Enter VR" button in Virtual Desktop's Quest interface. 
+
+### Simultaneous tracking can switch back to controllers unexpectedly
+
+We guess whether hand or controller tracking is in use by how far away from the controller position the hands are; if they are the same you are using the controllers. 
+Quest ( 3 in particular ) will often place controllers directly infront of you if they cannot actively be tracked. When that position overlaps with your actual hand position, it switches to controllers. 
+
+Workaround: Enable `Force hand primary` to force it to assume you are hand tracking, even when holding holding the controllers. You will be unable to swtich back to controllers.
+
+## Build Instructions
+
+Clone recursively and build with Visual Studio 2022.
+
+You can build directly with cmake, but OpenVR does build with newer CMake versions, so Visual Studio 2022 is recommended.
+
+`build_installer.bat` generates the installer from files in `./output` and downloads the Microsoft Visual C++ Redistributable into a local build cache. It copies the installer and a standalone `HandOfLesser.exe` desktop interface to `./distribution`.
+
+Use Unity to export the contents of `./Unity` as `HandOfLesser.UnityPackage`, then copy it into `./distribution` manually.
+
+## Developer Setup
+
+`register_dev_driver.bat` registers the driver in `./output` with SteamVR, overriding any existing registration.
+
+## Contact
+
+Discord: <https://discord.gg/k9QNcvvJmF>
