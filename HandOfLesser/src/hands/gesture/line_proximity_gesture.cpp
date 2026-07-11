@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include "src/openxr/xr_hand_utils.h"
+#include "src/openxr/xr_joint_utils.h"
 
 
 namepsace HOL::Gesture::ProximityGesture

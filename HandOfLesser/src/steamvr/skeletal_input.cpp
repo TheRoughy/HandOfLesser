@@ -1,7 +1,7 @@
 #pragma once
 
 #include "skeletal_input.h"
-#include "src/openxr/xr_hand_utils.h"
+#include "src/openxr/xr_joint_utils.h"
 #include <src/core/ui/user_interface.h>
 
 #include "src/openxr/XrUtils.h"

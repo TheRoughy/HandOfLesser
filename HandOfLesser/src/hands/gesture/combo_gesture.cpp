@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include "src/openxr/xr_hand_utils.h"
+#include "src/openxr/xr_joint_utils.h"
 #include "src/core/ui/user_interface.h"
 #include "chain_gesture.h"
 #include "src/util/hol_utils.h"

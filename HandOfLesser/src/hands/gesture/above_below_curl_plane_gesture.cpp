@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include "src/openxr/xr_hand_utils.h"
+#include "src/openxr/xr_joint_utils.h"
 #include "above_below_curl_plane_gesture.h"
 #include "src/core/ui/user_interface.h"
 

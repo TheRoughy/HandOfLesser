@@ -49,6 +49,7 @@ namespace HOL::OpenXR
 	bool handleXR(std::string what, XrResult res);
 
 	Eigen::Vector3f toEigenVector(const XrVector3f& xrVector);
+	XrVector3f toXrVector(const Eigen::Vector3f& eigenVector);
 
 	Eigen::Quaternionf toEigenQuaternion(const XrQuaternionf& xrQuat);
 

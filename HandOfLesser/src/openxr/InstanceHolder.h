@@ -5,6 +5,7 @@
 #include <openxr/openxr.hpp>
 #include "XrEventsInterface.h"
 #include "openxr_state.h"
+#include <HandOfLesserCommon.h>
 
 #include <iostream>
 
@@ -22,6 +23,7 @@ namespace HOL::OpenXR
 		XrTime getTime();
 		HOL::OpenXR::OpenXrState getState();
 		bool isHeadless();
+		bool getHmdPose(XrSpace space, XrTime time, HOL::PoseLocation& pose);
 
 		xr::UniqueDynamicInstance mInstance;
 		xr::UniqueDynamicSession mSession;

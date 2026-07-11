@@ -510,8 +510,18 @@ void HandOfLesserCore::doOpenXRStuff()
 		this->mInstanceHolder.foregroundRender();
 	}
 
-	// this->mInstanceHolder.getHmdPosition();
-	this->mBodyTracking.updateBody(this->mInstanceHolder.mStageSpace, time);
+	HOL::PoseLocation hmdPose;
+	const bool hmdPoseValid
+		= this->mInstanceHolder.getHmdPose(this->mInstanceHolder.mStageSpace.get(), time, hmdPose);
+	const std::array<const HOL::HandPose*, HOL::HandSide_MAX> lastHandPoses = {
+		&this->mHandTracking.getHandPose(HOL::HandSide::LeftHand),
+		&this->mHandTracking.getHandPose(HOL::HandSide::RightHand),
+	};
+	this->mBodyTracking.updateBody(
+		this->mInstanceHolder.mStageSpace,
+		time,
+		hmdPoseValid ? &hmdPose : nullptr,
+		lastHandPoses);
 	this->mHandTracking.updateHands(
 		this->mInstanceHolder.mStageSpace, time, this->mBodyTracking.getBodyTracker());
 	this->mHandTracking.updateInputs();

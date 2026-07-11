@@ -1,9 +1,19 @@
 
-#include "xr_hand_utils.h"
+#include "xr_joint_utils.h"
 #include "XrUtils.h"
 
 namespace HOL::OpenXR
 {
+	XrBodyJointLocationFB toXrBodyJointLocation(const HOL::PoseLocation& pose)
+	{
+		XrBodyJointLocationFB joint{};
+		joint.locationFlags
+			= XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+		joint.pose.position = toXrVector(pose.position);
+		joint.pose.orientation = toXrQuaternion(pose.orientation);
+		return joint;
+	}
+
 	XrHandJointLocationEXT& getJoint(XrHandJointLocationEXT leftHandJoints[],
 									 XrHandJointLocationEXT rightHandJoints[],
 									 XrHandJointEXT joint,

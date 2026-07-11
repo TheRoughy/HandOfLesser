@@ -21,7 +21,7 @@
 	src/windows/console_log.cpp
 	src/windows/windows_utils.cpp
 	src/core/ui/visualizer.cpp
-	src/openxr/xr_hand_utils.cpp
+	src/openxr/xr_joint_utils.cpp
 	src/hands/gesture/base_gesture.cpp
 	src/hands/gesture/proximity_gesture.cpp
 	src/hands/gesture/above_below_curl_plane_gesture.cpp

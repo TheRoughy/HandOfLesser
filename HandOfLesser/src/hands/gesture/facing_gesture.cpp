@@ -20,6 +20,15 @@ namespace HOL::Gesture::FacingGesture
 			}
 
 			const auto& joint = bodyJoints[jointIndex];
+			const bool positionValid
+				= (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+			const bool orientationValid
+				= (joint.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) != 0;
+			if (!positionValid || !orientationValid)
+			{
+				return false;
+			}
+
 			position = OpenXR::toEigenVector(joint.pose.position);
 			orientation = OpenXR::toEigenQuaternion(joint.pose.orientation);
 			return true;

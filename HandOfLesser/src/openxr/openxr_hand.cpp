@@ -1,6 +1,6 @@
 #include "openxr_hand.h"
 #include "XrUtils.h"
-#include "xr_hand_utils.h"
+#include "xr_joint_utils.h"
 #include <HandOfLesserCommon.h>
 #include "HandTrackingInterface.h"
 #include "src/core/settings_global.h"
@@ -315,12 +315,20 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 	XrBodyJointLocationFB* bodyPalmJoint = nullptr;
 	if (bodyTracker.active)
 	{
-		bodyPalmJoint = &bodyTracker.getLastJointLocations()[this->mSide == HandSide::LeftHand
-																 ? XR_BODY_JOINT_LEFT_HAND_PALM_FB
-																 : XR_BODY_JOINT_RIGHT_HAND_PALM_FB];
+		auto& candidate = bodyTracker.getLastJointLocations()[
+			this->mSide == HandSide::LeftHand ? XR_BODY_JOINT_LEFT_HAND_PALM_FB
+											 : XR_BODY_JOINT_RIGHT_HAND_PALM_FB];
+		const bool positionValid
+			= (candidate.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+		const bool orientationValid
+			= (candidate.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) != 0;
+		if (positionValid && orientationValid)
+		{
+			bodyPalmJoint = &candidate;
+		}
 	}
 
-	if ((bodyTracker.active) && (!this->handPose.poseTracked))
+	if (bodyPalmJoint != nullptr && !this->handPose.poseTracked)
 	{
 		// Copy prev to current to maintain finger pose
 		std::copy(std::begin(mPrevJointLocations),
@@ -335,7 +343,7 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 		this->handPose.poseTracked = false; // otherwise estimated usign upper-body
 		usingBodyTrackingFallback = true;
 	}
-	else if (bodyTracker.active && alwaysUseUpperBodyTracking)
+	else if (bodyPalmJoint != nullptr && alwaysUseUpperBodyTracking)
 	{
 		// Just copy palm position from body.
 		palmLocation.pose.position = bodyPalmJoint->pose.position;

@@ -12,7 +12,10 @@ namespace HOL::OpenXR
 	{
 	public:
 		void init(xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session);
-		void updateBody(xr::UniqueDynamicSpace& space, XrTime time);
+		void updateBody(xr::UniqueDynamicSpace& space,
+						XrTime time,
+						const HOL::PoseLocation* hmdPose,
+						const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses);
 		void drawBody();
 		OpenXRBody& getBodyTracker();
 		HOL::MultimodalPosePayload getMultimodalPosePayload();

@@ -180,6 +180,42 @@ void HOL::OpenXR::InstanceHolder::getSystemProperties()
 			  << "\n";
 }
 
+bool InstanceHolder::getHmdPose(XrSpace space, XrTime time, HOL::PoseLocation& pose)
+{
+	XrViewLocateInfo locateInfo{XR_TYPE_VIEW_LOCATE_INFO};
+	locateInfo.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+	locateInfo.displayTime = time;
+	locateInfo.space = space;
+
+	XrViewState viewState{XR_TYPE_VIEW_STATE};
+	XrView views[2] = {{XR_TYPE_VIEW}, {XR_TYPE_VIEW}};
+	uint32_t viewCount = 0;
+
+	if (!handleXR("xrLocateViews HMD pose",
+				  xrLocateViews(this->mSession.get(), &locateInfo, &viewState, 2, &viewCount, views)))
+	{
+		return false;
+	}
+
+	const bool positionValid = (viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) != 0;
+	const bool orientationValid
+		= (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0;
+	if (viewCount == 0 || !positionValid || !orientationValid)
+	{
+		return false;
+	}
+
+	Eigen::Vector3f position = Eigen::Vector3f::Zero();
+	for (uint32_t i = 0; i < viewCount; i++)
+	{
+		position += HOL::OpenXR::toEigenVector(views[i].pose.position);
+	}
+
+	pose.position = position / static_cast<float>(viewCount);
+	pose.orientation = HOL::OpenXR::toEigenQuaternion(views[0].pose.orientation);
+	return true;
+}
+
 void InstanceHolder::pollEvent()
 {
 	pollEventInternal(this->mInstance.get(), this->mDispatcher);

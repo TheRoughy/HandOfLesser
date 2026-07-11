@@ -7,7 +7,7 @@
 #include "src/core/ui/user_interface.h"
 #include "XrUtils.h"
 #include "src/core/settings_global.h"
-#include "xr_hand_utils.h"
+#include "xr_joint_utils.h"
 #include "src/hands/gesture_binding_builder.h"
 #include "src/core/state_global.h"
 #include "src/steamvr/steamvr_input.h"

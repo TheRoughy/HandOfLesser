@@ -21,7 +21,7 @@ public:
 		OpenXRBody& bodyTracker,
 		float triggerStabilizationSmoothingMS);
 
-	HandPose handPose;
+	HandPose handPose{};
 	XrHandJointLocationEXT* getLastJointLocations();
 	const XrHandTrackingAimStateFB* getAimState() const;
 

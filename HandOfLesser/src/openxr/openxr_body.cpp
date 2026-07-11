@@ -1,5 +1,6 @@
 #include "openxr_body.h"
 #include "HandTrackingInterface.h"
+#include "xr_joint_utils.h"
 
 #include "XrUtils.h"
 
@@ -10,6 +11,58 @@
 #include <algorithm>
 #include <iostream>
 #include <iterator>
+
+namespace
+{
+	bool hasValidPose(const XrBodyJointLocationFB& joint)
+	{
+		return (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
+			   && (joint.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
+	}
+
+	Eigen::Quaternionf getBodyJointOrientation(const Eigen::Quaternionf& viewOrientation)
+	{
+		const Eigen::Quaternionf viewToBody
+			= Eigen::Quaternionf::FromTwoVectors(Eigen::Vector3f::UnitY(),
+											 Eigen::Vector3f(0.0f, 0.0f, -1.0f));
+		return (viewOrientation * viewToBody).normalized();
+	}
+
+	Eigen::Quaternionf getYawOnlyBodyJointOrientation(const Eigen::Quaternionf& viewOrientation)
+	{
+		Eigen::Vector3f forward
+			= viewOrientation * Eigen::Vector3f(0.0f, 0.0f, -1.0f);
+		forward.y() = 0.0f;
+
+		if (forward.squaredNorm() <= 0.000001f)
+		{
+			forward = Eigen::Vector3f(0.0f, 0.0f, -1.0f);
+		}
+		else
+		{
+			forward.normalize();
+		}
+
+		const Eigen::Vector3f up = Eigen::Vector3f::UnitY();
+		const Eigen::Vector3f right = forward.cross(up).normalized();
+
+		Eigen::Matrix3f orientation;
+		orientation.col(0) = right;
+		orientation.col(1) = forward;
+		orientation.col(2) = up;
+		return Eigen::Quaternionf(orientation);
+	}
+
+	// Synthetic torso pose used when body tracking is unavailable.
+	// Basically HMD position but lower and without roll or pitch.
+	HOL::PoseLocation getSyntheticTorsoPose(const HOL::PoseLocation& hmdPose)
+	{
+		HOL::PoseLocation torsoPose;
+		torsoPose.position = hmdPose.position - Eigen::Vector3f(0.0f, 0.25f, 0.0f);
+		torsoPose.orientation = getYawOnlyBodyJointOrientation(hmdPose.orientation);
+		return torsoPose;
+	}
+} // namespace
 
 // Oculus runtime returns bogus orientations for body tracking.
 // They're not OVR-style either, no idea. Fix them as needed.
@@ -54,27 +107,40 @@ void OpenXRBody::init(xr::UniqueDynamicSession& session)
 	HandTrackingInterface::createBodyTracker(session, mBodyTracker);
 }
 
-void OpenXRBody::updateJointLocations(xr::UniqueDynamicSpace& space, XrTime time)
+void OpenXRBody::updateJointLocations(xr::UniqueDynamicSpace& space,
+								  XrTime time,
+								  const HOL::PoseLocation* hmdPose,
+								  const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
+									  lastHandPoses)
 {
-	if (mBodyTracker == nullptr)
-		return;
-
 	std::copy(std::begin(mJointLocations),
 			  std::end(mJointLocations),
 			  std::begin(mPreviousJointLocations));
 
-	XrResult result = HandTrackingInterface::locateBodyJoints(
-		this->mBodyTracker, space, time, this->mJointLocations, this->confidence);
-	if (result != XR_SUCCESS)
+	const bool usingSyntheticBody = mBodyTracker == nullptr;
+	if (usingSyntheticBody)
 	{
-		this->confidence = 0.0f;
-		this->active = false;
-		HOL::display::BodyTracking.confidence = this->confidence;
-		HOL::display::BodyTracking.headPoseValid = false;
-		return;
+		setFallbackJointLocations(hmdPose, lastHandPoses);
 	}
-
-	this->active = confidence > 0.0f;
+	else
+	{
+		XrResult result = HandTrackingInterface::locateBodyJoints(
+			mBodyTracker, space, time, mJointLocations, confidence);
+		active = result == XR_SUCCESS && confidence > 0.0f;
+		if (!active)
+		{
+			confidence = 0.0f;
+			std::fill(std::begin(mJointLocations),
+					  std::end(mJointLocations),
+					  XrBodyJointLocationFB{});
+			std::fill(std::begin(mCorrectedJointLocations),
+					  std::end(mCorrectedJointLocations),
+					  XrBodyJointLocationFB{});
+			HOL::display::BodyTracking.headPoseValid = false;
+			HOL::display::BodyTracking.confidence = confidence;
+			return;
+		}
+	}
 
 	// Generate our own palm joints from body tracking.
 	// The joint is missing in the oculus runtime, and calculated incorrectly in VDXR.
@@ -86,11 +152,17 @@ void OpenXRBody::updateJointLocations(xr::UniqueDynamicSpace& space, XrTime time
 	// VDXR marks wrist onwards as tracked when tracked, rest untracked.
 	// Oculus only marks metacarpal and onwards.
 	{
-		const bool useArmTrackingAnchor = canUseArmTrackingAnchor();
+		const bool useArmTrackingAnchor = !usingSyntheticBody && canUseArmTrackingAnchor();
 
 		// Left hand
 		auto& leftMetacarpal = mJointLocations[XR_BODY_JOINT_LEFT_HAND_MIDDLE_METACARPAL_FB];
-		if (leftMetacarpal.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT)
+		const bool leftPalmAvailable
+			= usingSyntheticBody
+				  ? lastHandPoses[HandSide::LeftHand]->poseValid
+						&& lastHandPoses[HandSide::LeftHand]->poseTracked
+							 : (leftMetacarpal.locationFlags
+								& XR_SPACE_LOCATION_POSITION_TRACKED_BIT);
+		if (leftPalmAvailable)
 		{
 			updateTrackedPalmTransform(HandSide::LeftHand,
 									 useArmTrackingAnchor ? XR_BODY_JOINT_LEFT_ARM_LOWER_FB
@@ -106,7 +178,13 @@ void OpenXRBody::updateJointLocations(xr::UniqueDynamicSpace& space, XrTime time
 
 		// Right hand
 		auto& rightMetacarpal = mJointLocations[XR_BODY_JOINT_RIGHT_HAND_MIDDLE_METACARPAL_FB];
-		if (rightMetacarpal.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT)
+		const bool rightPalmAvailable
+			= usingSyntheticBody
+				  ? lastHandPoses[HandSide::RightHand]->poseValid
+						&& lastHandPoses[HandSide::RightHand]->poseTracked
+							 : (rightMetacarpal.locationFlags
+								& XR_SPACE_LOCATION_POSITION_TRACKED_BIT);
+		if (rightPalmAvailable)
 		{
 			updateTrackedPalmTransform(HandSide::RightHand,
 									 useArmTrackingAnchor ? XR_BODY_JOINT_RIGHT_ARM_LOWER_FB
@@ -119,6 +197,12 @@ void OpenXRBody::updateJointLocations(xr::UniqueDynamicSpace& space, XrTime time
 			mWasHandTrackingTracked[(int)HandSide::RightHand] = false;
 			preservePalmPose(HandSide::RightHand);
 		}
+	}
+
+	if (usingSyntheticBody)
+	{
+		active = hasValidPose(mJointLocations[XR_BODY_JOINT_HEAD_FB])
+				 && hasValidPose(mJointLocations[XR_BODY_JOINT_CHEST_FB]);
 	}
 
 	// Buffer used by any callers so they don't get mid-correction data
@@ -135,11 +219,6 @@ void OpenXRBody::updateJointLocations(xr::UniqueDynamicSpace& space, XrTime time
 
 XrBodyJointLocationFB* OpenXRBody::getLastJointLocations()
 {
-	if (mBodyTracker == nullptr)
-	{
-		return nullptr;
-	}
-
 	return this->mCorrectedJointLocations;
 }
 
@@ -156,8 +235,7 @@ XrBodyTrackerFB OpenXRBody::getBodyTrackerFB()
 bool OpenXRBody::getHeadPose(HOL::PoseLocation& pose) const
 {
 	const auto& head = mCorrectedJointLocations[XR_BODY_JOINT_HEAD_FB];
-	if (!(head.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
-		|| !(head.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
+	if (!hasValidPose(head))
 	{
 		return false;
 	}
@@ -165,6 +243,46 @@ bool OpenXRBody::getHeadPose(HOL::PoseLocation& pose) const
 	pose.position = OpenXR::toEigenVector(head.pose.position);
 	pose.orientation = OpenXR::toEigenQuaternion(head.pose.orientation);
 	return true;
+}
+
+// Populate raw body data from the HMD and the previous frame's valid hand palms. The normal body
+// correction path stores and preserves the palm-to-torso transforms afterward.
+void OpenXRBody::setFallbackJointLocations(
+	const HOL::PoseLocation* hmdPose,
+	const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses)
+{
+	confidence = 0.0f;
+	active = false;
+	std::fill(std::begin(mJointLocations),
+			  std::end(mJointLocations),
+			  XrBodyJointLocationFB{});
+	if (hmdPose == nullptr)
+	{
+		return;
+	}
+
+	HOL::PoseLocation headPose = *hmdPose;
+	headPose.orientation = getBodyJointOrientation(hmdPose->orientation);
+	mJointLocations[XR_BODY_JOINT_HEAD_FB] = OpenXR::toXrBodyJointLocation(headPose);
+	mJointLocations[XR_BODY_JOINT_CHEST_FB]
+		= OpenXR::toXrBodyJointLocation(getSyntheticTorsoPose(*hmdPose));
+
+	for (int side = 0; side < HOL::HandSide_MAX; side++)
+	{
+		const HOL::HandPose& handPose = *lastHandPoses[side];
+		if (!handPose.poseValid || !handPose.poseTracked)
+		{
+			continue;
+		}
+
+		const XrBodyJointFB palmJoint = side == HandSide::LeftHand
+										? XR_BODY_JOINT_LEFT_HAND_PALM_FB
+										: XR_BODY_JOINT_RIGHT_HAND_PALM_FB;
+		auto& palm = mJointLocations[palmJoint];
+		palm = OpenXR::toXrBodyJointLocation(handPose.palmLocation);
+		palm.locationFlags |= XR_SPACE_LOCATION_POSITION_TRACKED_BIT
+						  | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+	}
 }
 
 void OpenXRBody::preservePalmPose(HandSide side)
@@ -252,6 +370,11 @@ void OpenXRBody::updateTrackedPalmTransform(HandSide side, XrBodyJointFB anchorJ
 
 bool OpenXRBody::canUseArmTrackingAnchor() const
 {
+	if (!isAvailable())
+	{
+		return false;
+	}
+
 	// With the oculus runtime we decide whether or not upper body tracking is enabled.
 	// With VDXR, we don't know if it is enabled. However, VDXR will mark the body joints as
 	// valid AND tracked when using a Quest2. With a Quest 3 where upper body is always enabled

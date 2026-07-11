@@ -16,9 +16,13 @@ void HOL::OpenXR::BodyTracking::init(xr::UniqueDynamicInstance& instance,
 	}
 }
 
-void HOL::OpenXR::BodyTracking::updateBody(xr::UniqueDynamicSpace& space, XrTime time)
+void HOL::OpenXR::BodyTracking::updateBody(xr::UniqueDynamicSpace& space,
+										   XrTime time,
+										   const HOL::PoseLocation* hmdPose,
+										   const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
+											   lastHandPoses)
 {
-	this->mBodyTracker.updateJointLocations(space, time);
+	this->mBodyTracker.updateJointLocations(space, time, hmdPose, lastHandPoses);
 }
 
 void HOL::OpenXR::BodyTracking::drawBody()
@@ -46,6 +50,11 @@ void HOL::OpenXR::BodyTracking::drawBody()
 
 		bool isValid = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
 					   == XR_SPACE_LOCATION_POSITION_VALID_BIT;
+		if (!isValid && (!this->mBodyTracker.isAvailable() || !this->mBodyTracker.active))
+		{
+			continue;
+		}
+
 		// Check if joint is tracked
 		bool isTracked = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT)
 						 == XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
@@ -140,7 +149,7 @@ void HOL::OpenXR::BodyTracking::drawBody()
 						IM_COL32(255, 210, 80, 110));
 	}
 
-	if (Config.visualizer.showBodyTrackerAxes)
+	if (Config.visualizer.showBodyTrackerAxes && this->mBodyTracker.isAvailable())
 	{
 		for (const auto& location : this->mLastBodyTrackerLocations)
 		{
@@ -162,7 +171,7 @@ HOL::MultimodalPosePayload HOL::OpenXR::BodyTracking::getMultimodalPosePayload()
 	MultimodalPosePayload payload;
 
 	auto* bodyJoints = mBodyTracker.getLastJointLocations();
-	if (bodyJoints == nullptr)
+	if (!mBodyTracker.isAvailable() || !mBodyTracker.active || bodyJoints == nullptr)
 	{
 		return payload;
 	}
@@ -224,7 +233,7 @@ std::vector<HOL::BodyTrackerPosePayload> HOL::OpenXR::BodyTracking::getBodyTrack
 	// Get body tracking joint data
 	XrBodyJointLocationFB* jointLocations = mBodyTracker.getLastJointLocations();
 
-	if (!jointLocations)
+	if (!mBodyTracker.isAvailable() || !mBodyTracker.active || !jointLocations)
 		return payloads;
 
 	// Send payload for each enabled tracker

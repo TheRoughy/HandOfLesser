@@ -3,7 +3,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include "src/core/settings_global.h"
-#include "src/openxr/xr_hand_utils.h"
+#include "src/openxr/xr_joint_utils.h"
 #include "above_below_curl_plane_gesture.h"
 #include "combo_gesture.h"
 #include "open_hand_pinch_gesture.h"

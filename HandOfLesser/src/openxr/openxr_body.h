@@ -1,9 +1,11 @@
 #pragma once
 
+#include <array>
 #include <d3d11.h> // Why do you need this??
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr.hpp>
 #include <HandOfLesserCommon.h>
+#include "src/hands/hand_pose.h"
 
 using namespace HOL;
 
@@ -12,7 +14,11 @@ class OpenXRBody
 public:
 	~OpenXRBody();
 	void init(xr::UniqueDynamicSession& session);
-	void updateJointLocations(xr::UniqueDynamicSpace& space, XrTime time);
+	void updateJointLocations(xr::UniqueDynamicSpace& space,
+								  XrTime time,
+								  const HOL::PoseLocation* hmdPose,
+								  const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
+									  lastHandPoses);
 
 	XrBodyJointLocationFB* getLastJointLocations();
 	bool isAvailable() const;
@@ -45,6 +51,9 @@ private:
 	bool canUseArmTrackingAnchor() const;
 	void generateMissingPalmJoint(HandSide side);
 	void updateTrackedPalmTransform(HandSide side, XrBodyJointFB anchorJoint, XrTime time);
+	void setFallbackJointLocations(
+		const HOL::PoseLocation* hmdPose,
+		const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses);
 
 	Eigen::Quaternionf fixOculusJointOrientation(const Eigen::Vector3f& currentJointPos,
 												 const Eigen::Vector3f& nextJointPos,

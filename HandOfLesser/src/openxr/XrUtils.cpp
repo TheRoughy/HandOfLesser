@@ -34,6 +34,15 @@ namespace HOL::OpenXR
 		return Eigen::Vector3f(xrVector.x, xrVector.y, xrVector.z);
 	}
 
+	XrVector3f toXrVector(const Eigen::Vector3f& eigenVector)
+	{
+		XrVector3f xrVector;
+		xrVector.x = eigenVector.x();
+		xrVector.y = eigenVector.y();
+		xrVector.z = eigenVector.z();
+		return xrVector;
+	}
+
 	Eigen::Quaternionf toEigenQuaternion(const XrQuaternionf& xrQuat)
 	{
 		return Eigen::Quaternionf(xrQuat.w, xrQuat.x, xrQuat.y, xrQuat.z);
