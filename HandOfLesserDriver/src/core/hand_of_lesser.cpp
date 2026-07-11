@@ -569,7 +569,8 @@ namespace HOL
 		const bool hookedMode
 			= Config.handPose.controllerMode == ControllerMode::HookedControllerMode;
 
-		if (hookedMode && forceUpdate)
+		if (hookedMode && forceUpdate
+			&& Config.handPose.possessionBehavior != PossessionBehavior_Input)
 		{
 			auto hookedControllers = mHookedControllers.load();
 			for (const auto& hooked : *hookedControllers)
@@ -866,6 +867,12 @@ namespace HOL
 		}
 
 		if (Config.handPose.controllerMode != ControllerMode::HookedControllerMode)
+		{
+			return false;
+		}
+
+		// Input-only possession must never alter the native controller's pose or connection state.
+		if (Config.handPose.possessionBehavior == PossessionBehavior_Input)
 		{
 			return false;
 		}
