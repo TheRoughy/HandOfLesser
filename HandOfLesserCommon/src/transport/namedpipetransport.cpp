@@ -224,6 +224,8 @@ bool NamedPipeTransport::waitForConnection(DWORD timeoutMs)
 
 size_t NamedPipeTransport::send(const char* buffer, size_t size)
 {
+	std::lock_guard lock(mSendMutex);
+
 	if (!mConnected || mPipe == INVALID_HANDLE_VALUE)
 	{
 		return 0;

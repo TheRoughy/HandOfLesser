@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN // Exclude winsock.h to avoid conflicts with winsock2.h
 #endif
 #include <windows.h>
+#include <mutex>
 #include "itransport.h"
 
 namespace HOL
@@ -42,6 +43,7 @@ namespace HOL
 		OVERLAPPED mWriteOverlapped = {};
 		bool mConnected = false;
 		char mPipeName[256] = {};
+		std::mutex mSendMutex;
 
 		// Helper methods
 		bool createServerPipe();
