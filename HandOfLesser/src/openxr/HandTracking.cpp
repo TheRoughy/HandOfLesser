@@ -68,19 +68,35 @@ std::shared_ptr<BaseAction> HOL::OpenXR::HandTracking::getActionForBindingIndex(
 	return actionSet->actionsByBindingIndex[bindingIndex];
 }
 
-void HandTracking::updateHands(xr::UniqueDynamicSpace& space, XrTime time, OpenXRBody& bodyTracker)
+void HandTracking::updateHands(xr::UniqueDynamicSpace& space,
+						   XrTime time,
+						   OpenXRBody& bodyTracker,
+						   const HOL::PoseLocation* hmdPose)
 {
 	auto now = std::chrono::steady_clock::now();
+	const HOL::HandTrackingSample* leftSample = nullptr;
+	const HOL::HandTrackingSample* rightSample = nullptr;
+	if (HOL::state::Runtime.isSteamVR)
+	{
+		// Querying OpenXR here would feed our emulated hands back into themselves. Reconstruct the
+		// hand from full-skeleton controllers observed by the driver instead.
+		leftSample = mSteamVRHandTrackingSource.getSample(
+			HOL::LeftHand, hmdPose, Config.handPose.applyBaseOffset);
+		rightSample = mSteamVRHandTrackingSource.getSample(
+			HOL::RightHand, hmdPose, Config.handPose.applyBaseOffset);
+	}
 	this->mLeftHand.updateJointLocations(
 		space,
 		time,
 		bodyTracker,
-		getTriggerStabilizationSmoothingMS(HOL::LeftHand, now));
+		getTriggerStabilizationSmoothingMS(HOL::LeftHand, now),
+		leftSample);
 	this->mRightHand.updateJointLocations(
 		space,
 		time,
 		bodyTracker,
-		getTriggerStabilizationSmoothingMS(HOL::RightHand, now));
+		getTriggerStabilizationSmoothingMS(HOL::RightHand, now),
+		rightSample);
 
 	// Populate gesture data
 	HOL::Gesture::GestureData data;
@@ -271,6 +287,11 @@ HOL::HandTransformPayload HandTracking::getTransformPayload(HOL::HandSide side)
 	payload.location = hand->handPose.palmLocation;
 	payload.velocity = hand->handPose.palmVelocity;
 
+	if (HOL::state::Runtime.isSteamVR)
+	{
+		mSteamVRHandTrackingSource.applySourcePose(side, payload);
+	}
+
 	return payload;
 }
 
@@ -278,6 +299,16 @@ HOL::HandPose& HandTracking::getHandPose(HOL::HandSide side)
 {
 	OpenXRHand& hand = (side == HOL::LeftHand) ? this->mLeftHand : this->mRightHand;
 	return hand.handPose;
+}
+
+void HandTracking::updateSteamVRHandBaseline(const HOL::SteamVRHandBaselinePayload& payload)
+{
+	mSteamVRHandTrackingSource.updateBaseline(payload);
+}
+
+void HandTracking::updateSteamVRHandPose(const HOL::SteamVRHandPosePayload& payload)
+{
+	mSteamVRHandTrackingSource.updatePose(payload);
 }
 
 void HOL::OpenXR::HandTracking::drawHands()

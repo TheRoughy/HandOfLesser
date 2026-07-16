@@ -2,6 +2,7 @@
 
 #include <d3d11.h> // Why do you need this??
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <memory>
 #include "openxr_hand.h"
@@ -20,10 +21,15 @@ namespace HOL::OpenXR
 	{
 	public:
 		void init(xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session);
-		void updateHands(xr::UniqueDynamicSpace& space, XrTime time, OpenXRBody& bodyTracker);
+		void updateHands(xr::UniqueDynamicSpace& space,
+					 XrTime time,
+					 OpenXRBody& bodyTracker,
+					 const HOL::PoseLocation* hmdPose);
 		void updateInputs();
 		HOL::HandTransformPayload getTransformPayload(HOL::HandSide side);
 		HOL::HandPose& getHandPose(HOL::HandSide side);
+		void updateSteamVRHandBaseline(const HOL::SteamVRHandBaselinePayload& payload);
+		void updateSteamVRHandPose(const HOL::SteamVRHandPosePayload& payload);
 		void drawHands();
 		OpenXRHand* getHand(HOL::HandSide side);
 
@@ -55,6 +61,7 @@ namespace HOL::OpenXR
 			HOL::HandSide side, std::chrono::steady_clock::time_point now) const;
 		OpenXRHand mLeftHand;
 		OpenXRHand mRightHand;
+		HOL::SteamVR::SteamVRHandTrackingSource mSteamVRHandTrackingSource;
 
 		std::atomic<std::shared_ptr<const ActionSet>> mActionSet = std::make_shared<ActionSet>();
 		std::array<bool, HOL::HandSide_MAX> mTriggerStabilizationHeld = {false, false};

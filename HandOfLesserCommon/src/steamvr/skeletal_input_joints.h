@@ -2,6 +2,7 @@
 #pragma once
 
 #include "openvr_driver.h"
+#include <openxr/openxr.h>
 
 namespace HOL::SteamVR
 {
@@ -60,6 +61,39 @@ namespace HOL::SteamVR
 		eBone_Aux_PinkyFinger,
 		eBone_Count
 	};
+
+	inline XrHandJointEXT skeletalBoneToOpenXRJoint(HandSkeletonBone bone)
+	{
+		switch (bone)
+		{
+			case eBone_Wrist: return XR_HAND_JOINT_WRIST_EXT;
+			case eBone_Thumb0: return XR_HAND_JOINT_THUMB_METACARPAL_EXT;
+			case eBone_Thumb1: return XR_HAND_JOINT_THUMB_PROXIMAL_EXT;
+			case eBone_Thumb2: return XR_HAND_JOINT_THUMB_DISTAL_EXT;
+			case eBone_Thumb3: return XR_HAND_JOINT_THUMB_TIP_EXT;
+			case eBone_IndexFinger0: return XR_HAND_JOINT_INDEX_METACARPAL_EXT;
+			case eBone_IndexFinger1: return XR_HAND_JOINT_INDEX_PROXIMAL_EXT;
+			case eBone_IndexFinger2: return XR_HAND_JOINT_INDEX_INTERMEDIATE_EXT;
+			case eBone_IndexFinger3: return XR_HAND_JOINT_INDEX_DISTAL_EXT;
+			case eBone_IndexFinger4: return XR_HAND_JOINT_INDEX_TIP_EXT;
+			case eBone_MiddleFinger0: return XR_HAND_JOINT_MIDDLE_METACARPAL_EXT;
+			case eBone_MiddleFinger1: return XR_HAND_JOINT_MIDDLE_PROXIMAL_EXT;
+			case eBone_MiddleFinger2: return XR_HAND_JOINT_MIDDLE_INTERMEDIATE_EXT;
+			case eBone_MiddleFinger3: return XR_HAND_JOINT_MIDDLE_DISTAL_EXT;
+			case eBone_MiddleFinger4: return XR_HAND_JOINT_MIDDLE_TIP_EXT;
+			case eBone_RingFinger0: return XR_HAND_JOINT_RING_METACARPAL_EXT;
+			case eBone_RingFinger1: return XR_HAND_JOINT_RING_PROXIMAL_EXT;
+			case eBone_RingFinger2: return XR_HAND_JOINT_RING_INTERMEDIATE_EXT;
+			case eBone_RingFinger3: return XR_HAND_JOINT_RING_DISTAL_EXT;
+			case eBone_RingFinger4: return XR_HAND_JOINT_RING_TIP_EXT;
+			case eBone_PinkyFinger0: return XR_HAND_JOINT_LITTLE_METACARPAL_EXT;
+			case eBone_PinkyFinger1: return XR_HAND_JOINT_LITTLE_PROXIMAL_EXT;
+			case eBone_PinkyFinger2: return XR_HAND_JOINT_LITTLE_INTERMEDIATE_EXT;
+			case eBone_PinkyFinger3: return XR_HAND_JOINT_LITTLE_DISTAL_EXT;
+			case eBone_PinkyFinger4: return XR_HAND_JOINT_LITTLE_TIP_EXT;
+			default: return XR_HAND_JOINT_MAX_ENUM_EXT;
+		}
+	}
 
 }
 

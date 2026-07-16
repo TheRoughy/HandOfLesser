@@ -1,10 +1,37 @@
 #include "controller.h"
+#include "src/math/math_utils.h"
 namespace HOL
 {
 	PoseLocationEuler getControllerBaseOffset()
 	{
 		return {Eigen::Vector3f(0.077f, -0.042f, -0.106f),
 				Eigen::Vector3f(-0.300f, -40.510f, -89.296f)};
+	}
+
+	PoseLocation getControllerPoseOffset(HandSide side,
+									 bool applyBaseOffset,
+									 Eigen::Vector3f userTranslationOffset,
+									 Eigen::Vector3f userRotationOffset)
+	{
+		auto baseOffset = applyBaseOffset
+			? getControllerBaseOffset()
+			: PoseLocationEuler{Eigen::Vector3f::Zero(), Eigen::Vector3f::Zero()};
+
+		if (side != HandSide::LeftHand)
+		{
+			baseOffset.position = flipHandTranslation(baseOffset.position);
+			baseOffset.orientation = flipHandRotation(baseOffset.orientation);
+			userTranslationOffset = flipHandTranslation(userTranslationOffset);
+			userRotationOffset = flipHandRotation(userRotationOffset);
+		}
+
+		const Eigen::Quaternionf baseRotation
+			= quaternionFromEulerAnglesDegrees(baseOffset.orientation);
+		PoseLocation offset;
+		offset.position = baseOffset.position + baseRotation * userTranslationOffset;
+		offset.orientation
+			= baseRotation * quaternionFromEulerAnglesDegrees(userRotationOffset);
+		return offset;
 	}
 
 	PoseLocationEuler getControllerOffsetPreset(ControllerOffsetPreset type)

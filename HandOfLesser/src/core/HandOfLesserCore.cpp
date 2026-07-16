@@ -425,6 +425,24 @@ void HOL::HandOfLesserCore::receiveDataThread()
 				break;
 			}
 
+			case NativePacketType::SteamVRHandBaseline: {
+				SteamVRHandBaselinePayload payload;
+				if (nativePacket.copyPayload(payload))
+				{
+					mHandTracking.updateSteamVRHandBaseline(payload);
+				}
+				break;
+			}
+
+			case NativePacketType::SteamVRHandPose: {
+				SteamVRHandPosePayload payload;
+				if (nativePacket.copyPayload(payload))
+				{
+					mHandTracking.updateSteamVRHandPose(payload);
+				}
+				break;
+			}
+
 			case NativePacketType::AppShutdownRequested: {
 				if (nativePacket.payloadSize != 0)
 				{
@@ -523,7 +541,10 @@ void HandOfLesserCore::doOpenXRStuff()
 		hmdPoseValid ? &hmdPose : nullptr,
 		lastHandPoses);
 	this->mHandTracking.updateHands(
-		this->mInstanceHolder.mStageSpace, time, this->mBodyTracking.getBodyTracker());
+		this->mInstanceHolder.mStageSpace,
+		time,
+		this->mBodyTracking.getBodyTracker(),
+		hmdPoseValid ? &hmdPose : nullptr);
 	this->mHandTracking.updateInputs();
 
 	// Periodic check for tracking features
@@ -626,16 +647,13 @@ void HandOfLesserCore::sendUpdate()
 		}
 	}
 
-	if (!state::Runtime.isSteamVR)
+	for (int i = 0; i < HandSide_MAX; i++)
 	{
-		for (int i = 0; i < HandSide_MAX; i++)
+		OpenXRHand* hand = this->mHandTracking.getHand((HandSide)i);
+		if (hand->handPose.poseValid) // Only update if valid
 		{
-			OpenXRHand* hand = this->mHandTracking.getHand((HandSide)i);
-			if (hand->handPose.poseValid) // Only update if valid
-			{
-				SkeletalPayload& payload = this->mSkeletalInput.getSkeletalPayload(hand, (HandSide)i);
-				this->mDriverTransport.sendPayload<NativePacketType::SkeletalInput>(payload);
-			}
+			SkeletalPayload& payload = this->mSkeletalInput.getSkeletalPayload(hand, (HandSide)i);
+			this->mDriverTransport.sendPayload<NativePacketType::SkeletalInput>(payload);
 		}
 	}
 

@@ -78,6 +78,10 @@ namespace HOL
 	};
 
 	PoseLocationEuler getControllerBaseOffset();
+	PoseLocation getControllerPoseOffset(HandSide side,
+									 bool applyBaseOffset,
+									 Eigen::Vector3f userTranslationOffset,
+									 Eigen::Vector3f userRotationOffset);
 
 	PoseLocationEuler getControllerOffsetPreset(ControllerOffsetPreset type);
 

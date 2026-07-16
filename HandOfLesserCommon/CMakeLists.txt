@@ -7,6 +7,8 @@ add_library(HandOfLesserCommon STATIC
 	src/hand/finger_bend.cpp
 	src/controller/controller.cpp
 	src/steamvr/input_wrapper.cpp
+	src/steamvr/skeletal_pose_utils.cpp
+	src/steamvr/steamvr_hand_tracking_source.cpp
 	src/settings/settings.cpp
 )
 
@@ -19,7 +21,8 @@ target_link_libraries(HandOfLesserCommon PUBLIC
 
 target_include_directories(HandOfLesserCommon
 	INTERFACE include
-	PRIVATE include ${OPENVR_INCLUDE_DIR}
+	PRIVATE include
+	PUBLIC ${OPENVR_INCLUDE_DIR}
 )
 
 # Allow us to include from src dir path instead of using relative paths
@@ -30,6 +33,7 @@ add_executable(HandOfLesserCommon.Tests
 )
 
 target_link_libraries(HandOfLesserCommon.Tests PRIVATE
+	HandOfLesserCommon
 	gtest
 	gtest_main
 )

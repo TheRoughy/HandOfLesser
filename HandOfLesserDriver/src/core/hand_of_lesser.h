@@ -1,7 +1,9 @@
 #pragma once
 #include <array>
 #include <atomic>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -47,7 +49,7 @@ namespace HOL
 		bool isEmulatedTracker(vr::ITrackedDeviceServerDriver* driver);
 		bool isShadowTracker(vr::ITrackedDeviceServerDriver* driver);
 		std::shared_ptr<HookedController> getHookedController(HOL::HandSide side);
-		std::vector<std::shared_ptr<HookedController>> getHookedControllers(HOL::HandSide side);
+		std::vector<std::shared_ptr<HookedController>> getHookedControllers(HOL::HandSide side) const;
 		std::shared_ptr<HookedController> getHookedControllerByDeviceId(uint32_t deviceId);
 		std::shared_ptr<HookedController> getHookedControllerBySerial(std::string serial);
 		std::shared_ptr<HookedController>
@@ -77,6 +79,8 @@ namespace HOL
 		void sendAllDeviceStates();
 		void sendAllDeviceInputInfo();
 		void refreshPreferredHookedControllers();
+		bool isForwardedHandTrackingController(const HookedController* controller) const;
+		void notifySteamVRHandTracking();
 		void sendStatus();
 		bool shouldSuppressTouchInput(
 			const HookedController* controller, const std::string& inputPath) const;
@@ -92,10 +96,20 @@ namespace HOL
 
 		void refreshPreferredHookedController(HOL::HandSide side);
 		void refreshRecoveryHookedController(HOL::HandSide side);
+		void refreshForwardedHandTrackingController(HOL::HandSide side);
+		std::shared_ptr<HookedController> findBestHookedController(
+			HOL::HandSide side,
+			vr::EVRSkeletalTrackingLevel requestedTrackingLevel,
+			const std::string& preferredSerial,
+			bool requireExactTrackingLevel) const;
 		std::string getPreferredHookedControllerSerial(HOL::HandSide side) const;
 		std::shared_ptr<HookedController> getRecoveryHookedController(HOL::HandSide side) const;
 		vr::EVRSkeletalTrackingLevel getRequestedSkeletalTrackingLevel() const;
-		int getHookedControllerSelectionScore(HookedController* controller) const;
+		int getHookedControllerSelectionScore(
+			HookedController* controller,
+			vr::EVRSkeletalTrackingLevel requestedTrackingLevel) const;
+		void steamVRHandTrackingThread();
+		void requestSteamVRHandTrackingResync();
 		void persistAutoLaunchSetting();
 		void disableAppDrivenState();
 		void ReceiveDataThread();
@@ -110,6 +124,11 @@ namespace HOL
 		void updateControllerConnectionStates(bool forceUpdate = false);
 
 		std::thread my_pose_update_thread_;
+		std::thread mSteamVRHandTrackingThread;
+		std::condition_variable mSteamVRHandTrackingCondition;
+		std::mutex mSteamVRHandTrackingMutex;
+		std::atomic<bool> mSteamVRHandTrackingPending = false;
+		std::atomic<bool> mSteamVRHandTrackingResync = false;
 		AppLauncher mAppLauncher;
 		HOL::NamedPipeTransport mTransport;
 
@@ -127,6 +146,9 @@ namespace HOL
 			mPreferredHookedControllers{};
 		std::array<std::atomic<std::shared_ptr<HookedController>>, HOL::HandSide_MAX>
 			mRecoveryHookedControllers{};
+		// Full-skeleton native controllers selected as the SteamVR-runtime hand data sources.
+		std::array<std::atomic<std::shared_ptr<HookedController>>, HOL::HandSide_MAX>
+			mForwardedHandTrackingControllers{};
 		HOL::HandTransformPayload mLastHandTransforms[HOL::HandSide_MAX]{};
 		bool mHasHandTransform[HOL::HandSide_MAX]{false, false};
 	};

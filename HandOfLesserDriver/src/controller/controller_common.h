@@ -22,9 +22,4 @@ namespace HOL::ControllerCommon
 								  Eigen::Quaternionf& rotation,
 								  const vr::DriverPose_t& pose);
 
-	vr::VRBoneTransform_t poseLocationToBoneTransform(HOL::PoseLocation& location);
-	void buildSkeletalPoseFromPayload(
-		const HOL::SkeletalPayload& payload,
-		vr::VRBoneTransform_t outPose[SteamVR::HandSkeletonBone::eBone_Count]);
-
 } // namespace HOL::ControllerCommon

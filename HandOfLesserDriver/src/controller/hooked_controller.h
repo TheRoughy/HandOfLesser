@@ -6,6 +6,9 @@
 #include "src/input/InputCommons.h"
 #include "src/steamvr/skeletal_input_joints.h"
 #include <chrono>
+#include <atomic>
+#include <memory>
+#include <optional>
 
 namespace HOL
 {
@@ -16,6 +19,24 @@ namespace HOL
 		friend class HandOfLesser;
 
 	public:
+		// Records what the send thread has already published for one hand source.
+		struct ForwardedHandState
+		{
+			uint32_t sourceDeviceId = vr::k_unTrackedDeviceIndexInvalid;
+			uint64_t poseGeneration = 0;
+			uint64_t skeletonGeneration = 0;
+			bool hasSentState = false;
+			bool active = false;
+		};
+
+		struct ForwardedHandUpdates
+		{
+			std::optional<HOL::SteamVRHandBaselinePayload> baseline;
+			std::optional<HOL::SteamVRHandPosePayload> pose;
+			std::chrono::steady_clock::time_point staleDeadline
+				= (std::chrono::steady_clock::time_point::max)();
+		};
+
 		HookedController(uint32_t id,
 						 HandSide side,
 						 vr::IVRServerDriverHost* host,
@@ -33,7 +54,8 @@ namespace HOL
 		void SubmitPose() override;
 		void registerSkeletonInput(vr::VRInputComponentHandle_t handle,
 								   vr::EVRSkeletalTrackingLevel level,
-								   const std::string& path);
+								   const std::string& path,
+								   const std::string& basePosePath);
 		bool isAugmentedSkeletonActive() const;
 		bool isSuppressed() const;
 		void setSuppressed(bool suppressed);
@@ -47,6 +69,16 @@ namespace HOL
 
 		void setLastOriginalPoseState(bool valid);
 		bool nativePoseHealthy() const;
+		bool cacheForwardedPose(const vr::DriverPose_t& pose, bool valid);
+		std::optional<vr::DriverPose_t> getForwardedPose() const;
+		bool cacheForwardedSkeleton(vr::EVRSkeletalMotionRange motionRange,
+									const vr::VRBoneTransform_t* transforms,
+									uint32_t transformCount);
+		ForwardedHandUpdates getForwardedHandUpdates(
+			ForwardedHandState& state,
+			bool enabled,
+			bool forceResync,
+			std::chrono::steady_clock::time_point now) const;
 		bool isHeld();
 		Eigen::Vector3f getWorldPosition();
 
@@ -62,7 +94,7 @@ namespace HOL
 		void sendDeviceState();
 
 		vr::DriverPose_t lastOriginalPose;
-		bool mLastOriginalPoseValid;
+		bool mLastOriginalPoseValid = false;
 		uint64_t mLastOriginalPoseSubmitTimeMs = 0;
 		uint64_t mLastOriginalPoseAgeMs = 0;
 
@@ -84,8 +116,24 @@ namespace HOL
 		void setActingAsTracker(bool acting);
 
 	private:
+		// Hook callbacks replace immutable snapshots; the forwarding thread reads them lock-free.
+		struct ForwardedPoseSnapshot
+		{
+			vr::DriverPose_t pose{};
+			bool valid = false;
+			uint64_t generation = 0;
+			std::chrono::steady_clock::time_point lastChange{};
+		};
+
+		struct ForwardedSkeletonSnapshot
+		{
+			vr::VRBoneTransform_t transforms[SteamVR::HandSkeletonBone::eBone_Count]{};
+			uint64_t generation = 0;
+		};
+
 		static constexpr int PoseStaleThresholdFrames = 2;
 		static constexpr int HandTrackingDebounceTime = 50;
+		static constexpr std::chrono::milliseconds ForwardedTrackingStaleTime{100};
 
 		vr::DriverPose_t mLastPose;
 		bool mLastHeldState
@@ -96,7 +144,7 @@ namespace HOL
 		HOL::HandTransformPayload mLastTransformPayload;
 		HOL::ControllerInputPayload mLastInputPayload;
 
-		bool mValidWhileOriginalInvalid;
+		bool mValidWhileOriginalInvalid = false;
 		bool mHasHadValidOriginalPose = false;
 		bool mHandTrackingTargetState = false;
 		bool mHandTrackingState = false;
@@ -116,6 +164,10 @@ namespace HOL
 		vr::VRBoneTransform_t mSkeletalPose[SteamVR::HandSkeletonBone::eBone_Count]{};
 		bool mSuppressed = false;
 		bool mPendingDisconnectState = false;
+		std::atomic<std::shared_ptr<const ForwardedPoseSnapshot>> mForwardedPose;
+		std::atomic<std::shared_ptr<const ForwardedSkeletonSnapshot>> mForwardedSkeleton;
+		std::atomic<uint64_t> mForwardedPoseGeneration = 0;
+		std::atomic<uint64_t> mForwardedSkeletonGeneration = 0;
 
 		// Shadow tracker support
 		EmulatedTrackerDriver* mShadowTracker = nullptr;

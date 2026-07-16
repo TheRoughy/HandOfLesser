@@ -29,6 +29,8 @@ namespace HOL
 		DriverStatus,
 		DeviceState,
 		DeviceInputInfo,
+		SteamVRHandBaseline,
+		SteamVRHandPose,
 		AppInitialized,
 		AppShutdownRequested,
 		InvalidPacket
@@ -83,6 +85,36 @@ namespace HOL
 			locations[SteamVR::HandSkeletonBone::eBone_Count]; // HandSkeletonBone::eBone_Count
 	};
 
+	// A full skeletal snapshot establishes the source and palm-relative hand shape. Subsequent
+	// high-frequency pose packets can move that same skeleton without resending all its bones.
+	struct SteamVRHandBaselinePayload
+	{
+		HOL::HandSide side = HOL::HandSide::HandSide_MAX;
+		bool active = false;
+		uint32_t sourceDeviceId = vr::k_unTrackedDeviceIndexInvalid;
+		uint64_t poseGeneration = 0;
+		uint64_t skeletonGeneration = 0;
+		vr::DriverPose_t pose{};
+		bool hasHmdPose = false;
+		vr::DriverPose_t hmdPose{};
+		vr::VRBoneTransform_t transforms[SteamVR::HandSkeletonBone::eBone_Count]{};
+	};
+	static_assert(sizeof(SteamVRHandBaselinePayload) <= NativePacketReadChunkSize);
+
+	// Pose-only update for an existing baseline. sourceDeviceId and poseGeneration prevent a late
+	// packet from being applied to a replacement source.
+	struct SteamVRHandPosePayload
+	{
+		HOL::HandSide side = HOL::HandSide::HandSide_MAX;
+		bool active = false;
+		uint32_t sourceDeviceId = vr::k_unTrackedDeviceIndexInvalid;
+		uint64_t poseGeneration = 0;
+		vr::DriverPose_t pose{};
+		bool hasHmdPose = false;
+		vr::DriverPose_t hmdPose{};
+	};
+	static_assert(sizeof(SteamVRHandPosePayload) <= NativePacketReadChunkSize);
+
 	struct MultimodalPosePayload
 	{
 		// Controller pose, transformed from palm position
@@ -105,6 +137,9 @@ namespace HOL
 		HOL::HandSide side = HandSide::HandSide_MAX;
 		HOL::PoseLocation location;
 		HOL::PoseVelocity velocity;
+		// SteamVR forwarding keeps the native pose structure as an output template.
+		bool hasSteamVRSourcePose = false;
+		vr::DriverPose_t steamVRSourcePose{};
 	};
 
 	struct BodyTrackerPosePayload

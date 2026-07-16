@@ -14,3 +14,5 @@
 #include "src/json/types.h"
 #include "src/steamvr/input_wrapper.h"
 #include "src/steamvr/skeletal_input_joints.h"
+#include "src/steamvr/skeletal_pose_utils.h"
+#include "src/steamvr/steamvr_hand_tracking_source.h"

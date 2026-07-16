@@ -215,7 +215,8 @@ void OpenXRHand::calculateCurlSplay()
 void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 									  XrTime time,
 									  OpenXRBody& bodyTracker,
-									  float triggerStabilizationSmoothingMS)
+									  float triggerStabilizationSmoothingMS,
+									  const HOL::HandTrackingSample* externalSample)
 {
 	// Copy to prev
 	std::copy(
@@ -225,18 +226,37 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 	bool prevPoseTracked = mPrevPoseTracked;
 
 	bool handActive = false;
-	bool useHandTrackingDataSource = HOL::state::Runtime.supportsHandTrackingDataSource;
+	const bool usingExternalSample
+		= externalSample != nullptr && externalSample->hasUpdateGeneration;
+	bool useHandTrackingDataSource = HOL::state::Runtime.supportsHandTrackingDataSource
+		&& externalSample == nullptr;
 	this->mAimState = {XR_TYPE_HAND_TRACKING_AIM_STATE_FB};
 	this->mDataSourceState = {XR_TYPE_HAND_TRACKING_DATA_SOURCE_STATE_EXT};
-	XrResult result = HandTrackingInterface::locateHandJoints(
-		this->mHandTracker,
-		space,
-		time,
-		this->mJointLocations,
-		this->mJointVelocities,
-		handActive,
-		HOL::state::Runtime.supportsHandTrackingAim ? &this->mAimState : nullptr,
-		useHandTrackingDataSource ? &this->mDataSourceState : nullptr);
+	XrResult result = XR_SUCCESS;
+	if (externalSample != nullptr)
+	{
+		std::copy(std::begin(externalSample->joints),
+				  std::end(externalSample->joints),
+				  std::begin(mJointLocations));
+		std::copy(std::begin(externalSample->velocities),
+				  std::end(externalSample->velocities),
+				  std::begin(mJointVelocities));
+		mAimState = externalSample->aimState;
+		mDataSourceState = externalSample->dataSourceState;
+		handActive = externalSample->active;
+	}
+	else
+	{
+		result = HandTrackingInterface::locateHandJoints(
+			this->mHandTracker,
+			space,
+			time,
+			this->mJointLocations,
+			this->mJointVelocities,
+			handActive,
+			HOL::state::Runtime.supportsHandTrackingAim ? &this->mAimState : nullptr,
+			useHandTrackingDataSource ? &this->mDataSourceState : nullptr);
+	}
 	if (result != XR_SUCCESS)
 	{
 		this->mLastPoseUpdateTime = {};
@@ -245,6 +265,7 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 		this->handPose.poseStale = !prevActive && !prevPoseValid && !prevPoseTracked;
 		this->mHasPrevRawPose = false;
 		this->mHasFilteredPalmPose = false;
+		this->mPrevExternalUpdateGeneration = 0;
 		this->mPrevFilteredSampleTime = 0;
 		this->mPrevActive = this->handPose.active;
 		this->mPrevPoseValid = this->handPose.poseValid;
@@ -261,7 +282,8 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 	this->handPose.active = handActive;
 	HOL::display::HandTransform[this->mSide].dataSource
 		= XR_HAND_TRACKING_DATA_SOURCE_MAX_ENUM_EXT;
-	if (useHandTrackingDataSource && this->mDataSourceState.isActive)
+	if ((externalSample != nullptr || useHandTrackingDataSource)
+		&& this->mDataSourceState.isActive)
 	{
 		HOL::display::HandTransform[this->mSide].dataSource = this->mDataSourceState.dataSource;
 	}
@@ -421,10 +443,21 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 		// Don't bother doing anything with stale data.
 		// VDXR updates at intervals of 7-16ms, Airlink updates constantly.
 		// Prediction also does nothing for VDXR.
-		this->handPose.poseStale = mHasPrevRawPose && !poseStateChanged
-								   && this->mPrevRawPose.position.isApprox(newPalmPosition)
-								   && this->mPrevRawPose.orientation.coeffs().isApprox(
-									  newPalmOrientation.coeffs());
+		if (usingExternalSample && !usingBodyTrackingFallback)
+		{
+			this->handPose.poseStale = !poseStateChanged
+				&& this->mPrevExternalUpdateGeneration
+					== externalSample->updateGeneration;
+			this->mPrevExternalUpdateGeneration = externalSample->updateGeneration;
+		}
+		else
+		{
+			this->handPose.poseStale = mHasPrevRawPose && !poseStateChanged
+				&& this->mPrevRawPose.position.isApprox(newPalmPosition)
+				&& this->mPrevRawPose.orientation.coeffs().isApprox(
+					newPalmOrientation.coeffs());
+			this->mPrevExternalUpdateGeneration = 0;
+		}
 
 		if (!this->handPose.poseStale)
 		{
@@ -463,7 +496,7 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 			rawPalmVelocity.angularVelocity
 				*= HOL::Config.steamvr.poseSmoothing.angularVelocityMultiplier;
 
-			float positionSmoothingAlpha
+			const float positionSmoothingAlpha
 				= getSmoothingAlpha(HOL::Config.steamvr.poseSmoothing.positionSmoothingMS
 										+ triggerStabilizationSmoothingMS,
 									this->mHasFilteredPalmPose,
@@ -471,7 +504,7 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 										|| this->handPose.poseValid != prevPoseValid,
 									this->mPrevFilteredSampleTime,
 									time);
-			float rotationSmoothingAlpha
+			const float rotationSmoothingAlpha
 				= getSmoothingAlpha(HOL::Config.steamvr.poseSmoothing.rotationSmoothingMS
 										+ triggerStabilizationSmoothingMS,
 									this->mHasFilteredPalmPose,
@@ -629,6 +662,7 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 		this->handPose.poseStale = !poseStateChanged;
 		this->mHasPrevRawPose = false;
 		this->mHasFilteredPalmPose = false;
+		this->mPrevExternalUpdateGeneration = 0;
 		this->mPrevFilteredSampleTime = 0;
 		this->mLastPoseUpdateTime = {};
 		HOL::display::HandTransform[this->mSide].updateRateMS.store(0.0f);

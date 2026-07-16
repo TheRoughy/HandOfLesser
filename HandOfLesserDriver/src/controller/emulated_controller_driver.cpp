@@ -379,7 +379,7 @@ namespace HOL
 			return;
 		}
 
-		ControllerCommon::buildSkeletalPoseFromPayload(*payload, mSkeletalPose);
+		SteamVR::buildSkeletalPoseFromPayload(*payload, mSkeletalPose);
 
 		vr::VRDriverInput()->UpdateSkeletonComponent(mInputHandles[InputHandleType::skeleton],
 													 vr::VRSkeletalMotionRange_WithoutController,

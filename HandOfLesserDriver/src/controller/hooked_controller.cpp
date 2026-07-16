@@ -5,9 +5,43 @@
 #include "src/tracker/emulated_tracker_driver.h"
 #include <driverlog.h>
 #include <src/utils/math_utils.h>
+#include <algorithm>
+#include <cstring>
 
 namespace HOL
 {
+	namespace
+	{
+		bool sameForwardedPose(const vr::DriverPose_t& left, const vr::DriverPose_t& right)
+		{
+			return left.poseTimeOffset == right.poseTimeOffset
+				   && std::memcmp(left.vecPosition, right.vecPosition, sizeof(left.vecPosition)) == 0
+				   && std::memcmp(&left.qRotation, &right.qRotation, sizeof(left.qRotation)) == 0
+				   && std::memcmp(left.vecVelocity, right.vecVelocity, sizeof(left.vecVelocity)) == 0
+				   && std::memcmp(left.vecAngularVelocity,
+							  right.vecAngularVelocity,
+							  sizeof(left.vecAngularVelocity))
+						  == 0
+				   && std::memcmp(left.vecWorldFromDriverTranslation,
+							  right.vecWorldFromDriverTranslation,
+							  sizeof(left.vecWorldFromDriverTranslation))
+						  == 0
+				   && std::memcmp(&left.qWorldFromDriverRotation,
+							  &right.qWorldFromDriverRotation,
+							  sizeof(left.qWorldFromDriverRotation))
+						  == 0
+				   && std::memcmp(left.vecDriverFromHeadTranslation,
+							  right.vecDriverFromHeadTranslation,
+							  sizeof(left.vecDriverFromHeadTranslation))
+						  == 0
+				   && std::memcmp(&left.qDriverFromHeadRotation,
+							  &right.qDriverFromHeadRotation,
+							  sizeof(left.qDriverFromHeadRotation))
+						  == 0;
+		}
+
+	} // namespace
+
 	bool HookedController::isSuppressed() const
 	{
 		return mSuppressed;
@@ -74,8 +108,9 @@ namespace HOL
 	}
 
 	void HookedController::registerSkeletonInput(vr::VRInputComponentHandle_t handle,
-												 vr::EVRSkeletalTrackingLevel level,
-												 const std::string& path)
+										 vr::EVRSkeletalTrackingLevel level,
+										 const std::string& path,
+										 const std::string& basePosePath)
 	{
 		mSkeletonHandle = handle;
 		mSkeletonTrackingLevel = level;
@@ -86,8 +121,10 @@ namespace HOL
 		HOL::HandOfLesser::Current->refreshPreferredHookedControllers();
 		sendDeviceState();
 		HOL::HandOfLesser::Current->sendStatus();
-		DriverLog(
-			"Hooked controller %s registered skeleton input %s", serial.c_str(), path.c_str());
+		DriverLog("Hooked controller %s registered skeleton input %s (base pose %s)",
+				  serial.c_str(),
+				  path.c_str(),
+				  basePosePath.c_str());
 	}
 
 	void HookedController::UpdatePose(HOL::HandTransformPayload* payload)
@@ -158,7 +195,7 @@ namespace HOL
 
 		mLoggedMissingSkeletonHandle = false;
 
-		HOL::ControllerCommon::buildSkeletalPoseFromPayload(*payload, mSkeletalPose);
+		HOL::SteamVR::buildSkeletalPoseFromPayload(*payload, mSkeletalPose);
 
 		if (hooks::UpdateSkeletonComponent::FunctionHook.originalFunc != nullptr)
 		{
@@ -352,6 +389,145 @@ namespace HOL
 	{
 		return this->mLastOriginalPoseValid
 			   && this->framesSinceLastPoseUpdate <= PoseStaleThresholdFrames;
+	}
+
+	bool HookedController::cacheForwardedPose(const vr::DriverPose_t& pose, bool valid)
+	{
+		auto previous = mForwardedPose.load();
+		const bool changed
+			= !previous || previous->valid != valid || !sameForwardedPose(previous->pose, pose);
+		if (!changed)
+		{
+			// SteamVR drivers may repeatedly submit an identical frozen pose after tracking is lost.
+			// Do not refresh lastChange, because the forwarding thread uses it to detect that case.
+			return false;
+		}
+
+		auto snapshot = std::make_shared<ForwardedPoseSnapshot>();
+		snapshot->pose = pose;
+		snapshot->valid = valid;
+		snapshot->lastChange = std::chrono::steady_clock::now();
+		snapshot->generation = mForwardedPoseGeneration.fetch_add(1) + 1;
+		mForwardedPose.store(std::move(snapshot));
+		return true;
+	}
+
+	std::optional<vr::DriverPose_t> HookedController::getForwardedPose() const
+	{
+		auto snapshot = mForwardedPose.load();
+		if (!snapshot || !snapshot->valid)
+		{
+			return std::nullopt;
+		}
+
+		return snapshot->pose;
+	}
+
+	bool HookedController::cacheForwardedSkeleton(vr::EVRSkeletalMotionRange motionRange,
+										 const vr::VRBoneTransform_t* transforms,
+										 uint32_t transformCount)
+	{
+		if (mSkeletonTrackingLevel != vr::VRSkeletalTracking_Full
+			|| motionRange != vr::VRSkeletalMotionRange_WithoutController
+			|| transforms == nullptr
+			|| transformCount != SteamVR::HandSkeletonBone::eBone_Count)
+		{
+			return false;
+		}
+
+		auto previous = mForwardedSkeleton.load();
+		const size_t transformBytes
+			= sizeof(vr::VRBoneTransform_t) * SteamVR::HandSkeletonBone::eBone_Count;
+		const bool changed
+			= !previous || std::memcmp(previous->transforms, transforms, transformBytes) != 0;
+		if (!changed)
+		{
+			// Skeletons can update less often than controller poses. Their cadence is not used to
+			// decide tracking loss; a changed skeleton only triggers a new full baseline.
+			return false;
+		}
+
+		auto snapshot = std::make_shared<ForwardedSkeletonSnapshot>();
+		std::copy(transforms,
+				  transforms + SteamVR::HandSkeletonBone::eBone_Count,
+				  snapshot->transforms);
+		snapshot->generation = mForwardedSkeletonGeneration.fetch_add(1) + 1;
+		mForwardedSkeleton.store(std::move(snapshot));
+		return true;
+	}
+
+	HookedController::ForwardedHandUpdates HookedController::getForwardedHandUpdates(
+		ForwardedHandState& state,
+		bool enabled,
+		bool forceResync,
+		std::chrono::steady_clock::time_point now) const
+	{
+		if (forceResync)
+		{
+			state = {};
+		}
+
+		ForwardedHandUpdates updates;
+		auto poseSnapshot = mForwardedPose.load();
+		auto skeletonSnapshot = mForwardedSkeleton.load();
+		// Full skeletal input identifies an actual hand source, while pose freshness determines
+		// whether that source is still tracked.
+		const bool active = enabled && poseSnapshot && skeletonSnapshot && poseSnapshot->valid
+			&& now - poseSnapshot->lastChange <= ForwardedTrackingStaleTime;
+		if (!active)
+		{
+			if (state.active || !state.hasSentState)
+			{
+				SteamVRHandBaselinePayload payload;
+				payload.side = mSide;
+				payload.sourceDeviceId = state.sourceDeviceId;
+				payload.poseGeneration = state.poseGeneration;
+				payload.skeletonGeneration = state.skeletonGeneration;
+				updates.baseline = payload;
+				state.hasSentState = true;
+				state.active = false;
+			}
+			return updates;
+		}
+
+		updates.staleDeadline = poseSnapshot->lastChange + ForwardedTrackingStaleTime;
+		const bool sourceChanged = state.sourceDeviceId != mDeviceId;
+		// A source or skeleton change invalidates pose-only deltas, so establish a new baseline.
+		if (!state.active || sourceChanged
+			|| state.skeletonGeneration != skeletonSnapshot->generation)
+		{
+			SteamVRHandBaselinePayload payload;
+			payload.side = mSide;
+			payload.active = true;
+			payload.sourceDeviceId = mDeviceId;
+			payload.poseGeneration = poseSnapshot->generation;
+			payload.skeletonGeneration = skeletonSnapshot->generation;
+			payload.pose = poseSnapshot->pose;
+			std::copy(std::begin(skeletonSnapshot->transforms),
+					  std::end(skeletonSnapshot->transforms),
+					  std::begin(payload.transforms));
+			updates.baseline = payload;
+			state.sourceDeviceId = payload.sourceDeviceId;
+			state.poseGeneration = payload.poseGeneration;
+			state.skeletonGeneration = payload.skeletonGeneration;
+			state.hasSentState = true;
+			state.active = true;
+			return updates;
+		}
+
+		if (state.poseGeneration != poseSnapshot->generation)
+		{
+			SteamVRHandPosePayload payload;
+			payload.side = mSide;
+			payload.active = true;
+			payload.sourceDeviceId = mDeviceId;
+			payload.poseGeneration = poseSnapshot->generation;
+			payload.pose = poseSnapshot->pose;
+			updates.pose = payload;
+			state.poseGeneration = payload.poseGeneration;
+		}
+
+		return updates;
 	}
 
 	Eigen::Vector3f HookedController::getWorldPosition()

@@ -19,7 +19,8 @@ public:
 		xr::UniqueDynamicSpace& space,
 		XrTime time,
 		OpenXRBody& bodyTracker,
-		float triggerStabilizationSmoothingMS);
+		float triggerStabilizationSmoothingMS,
+		const HOL::HandTrackingSample* externalSample = nullptr);
 
 	HandPose handPose{};
 	XrHandJointLocationEXT* getLastJointLocations();
@@ -41,6 +42,7 @@ private:
 	HOL::PoseLocation mPrevRawPose{};
 	HOL::PoseLocation mFilteredPalmPose{};
 	HOL::PoseVelocity mFilteredPalmVelocity{};
+	uint64_t mPrevExternalUpdateGeneration = 0;
 	bool mPrevActive = false;
 	bool mPrevPoseValid = false;
 	bool mPrevPoseTracked = false;

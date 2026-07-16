@@ -28,16 +28,12 @@ namespace HOL
 			return;
 		}
 
-		// We can't submit poses to SteamVR when also receiving data from it,
-		// so you can only possess with input only.
-		if (settings.handPose.controllerMode == ControllerMode::EmulateControllerMode)
-		{
-			settings.handPose.controllerMode = ControllerMode::NoControllerMode;
-		}
-
+		// SteamVR hand-tracking controllers are the source for forwarded hand data. Possessing
+		// those devices would also expose their nonstandard input profile, so use separate
+		// emulated controllers instead.
 		if (settings.handPose.controllerMode == ControllerMode::HookedControllerMode)
 		{
-			settings.handPose.possessionBehavior = PossessionBehavior_Input;
+			settings.handPose.controllerMode = ControllerMode::NoControllerMode;
 		}
 	}
 
@@ -54,6 +50,7 @@ namespace HOL
 		// Initialize transport as server (creates named pipe and waits for client)
 		this->mTransport.init(PipeRole::Server, R"(\\.\pipe\HandOfLesser)");
 
+		mSteamVRHandTrackingThread = std::thread(&HandOfLesser::steamVRHandTrackingThread, this);
 		my_pose_update_thread_ = std::thread(&HandOfLesser::ReceiveDataThread, this);
 		mAppLauncher.start();
 	}
@@ -67,13 +64,14 @@ namespace HOL
 		DriverLog("Waiting for app to connect...");
 		while (this->mActive.load() && !this->mTransport.isConnected())
 		{
-			if (this->mTransport.waitForConnection(1000))
-			{
-				DriverLog("App connected!");
+				if (this->mTransport.waitForConnection(1000))
+				{
+					DriverLog("App connected!");
 
-				// Send initialization message
-				DriverInitializedPayload initPayload;
-				this->mTransport.sendPayload<NativePacketType::DriverInitialized>(initPayload);
+					// Send initialization message
+					DriverInitializedPayload initPayload;
+					this->mTransport.sendPayload<NativePacketType::DriverInitialized>(initPayload);
+					requestSteamVRHandTrackingResync();
 				DriverLog("Sent DriverInitialized payload");
 				break;
 			}
@@ -89,14 +87,15 @@ namespace HOL
 				{
 					disableAppDrivenState();
 					DriverLog("App disconnected, waiting for reconnection...");
-					if (this->mTransport.waitForConnection(1000))
-					{
-						DriverLog("App reconnected!");
+						if (this->mTransport.waitForConnection(1000))
+						{
+							DriverLog("App reconnected!");
 
-						// Send initialization message again
-						DriverInitializedPayload initPayload;
-						this->mTransport.sendPayload<NativePacketType::DriverInitialized>(
-							initPayload);
+							// Send initialization message again
+							DriverInitializedPayload initPayload;
+							this->mTransport.sendPayload<NativePacketType::DriverInitialized>(
+								initPayload);
+							requestSteamVRHandTrackingResync();
 						DriverLog("Sent DriverInitialized payload");
 					}
 				}
@@ -277,8 +276,15 @@ namespace HOL
 						break;
 					}
 
+					const bool steamVRRuntimeChanged
+						= Runtime.isSteamVR != payload.runtime.isSteamVR;
 					Tracking = payload.tracking;
 					Runtime = payload.runtime;
+					if (steamVRRuntimeChanged)
+					{
+						refreshPreferredHookedControllers();
+						requestSteamVRHandTrackingResync();
+					}
 
 					updateControllerConnectionStates();
 					break;
@@ -292,6 +298,7 @@ namespace HOL
 					}
 
 					DriverLog("App initialized, sending current device state");
+					requestSteamVRHandTrackingResync();
 					sendAllDeviceStates();
 					sendAllDeviceInputInfo();
 					sendStatus();
@@ -1077,7 +1084,7 @@ namespace HOL
 	}
 
 	std::vector<std::shared_ptr<HookedController>>
-	HandOfLesser::getHookedControllers(HOL::HandSide side)
+	HandOfLesser::getHookedControllers(HOL::HandSide side) const
 	{
 		std::vector<std::shared_ptr<HookedController>> controllers;
 
@@ -1107,14 +1114,14 @@ namespace HOL
 
 	void HandOfLesser::refreshPreferredHookedControllers()
 	{
-		// Preferred possessed controllers and the real-controller recovery pair both only change
-		// when device availability, side assignment, or settings change, so cache them together
-		// instead of rescanning the full hooked list every frame.
+		// Controller selections only change when device availability, side assignment, or settings
+		// change, so cache them together instead of rescanning the full hooked list every frame.
 		for (int i = 0; i < HOL::HandSide_MAX; ++i)
 		{
 			HOL::HandSide side = static_cast<HOL::HandSide>(i);
 			refreshPreferredHookedController(side);
 			refreshRecoveryHookedController(side);
+			refreshForwardedHandTrackingController(side);
 		}
 	}
 
@@ -1125,49 +1132,10 @@ namespace HOL
 			return;
 		}
 
-		auto controllers = getHookedControllers(side);
-		if (controllers.empty())
-		{
-			mPreferredHookedControllers[side].store(nullptr);
-			return;
-		}
-
-		std::shared_ptr<HookedController> bestController;
 		std::string preferredSerial
 			= Runtime.isSteamVR ? "" : getPreferredHookedControllerSerial(side);
-		if (!preferredSerial.empty())
-		{
-			// Explicit user selection always wins when that serial is currently available.
-			for (const auto& controller : controllers)
-			{
-				if (controller->serial == preferredSerial)
-				{
-					bestController = controller;
-					break;
-				}
-			}
-		}
-
-		int bestScore = std::numeric_limits<int>::lowest();
-
-		if (bestController == nullptr)
-		{
-			for (const auto& controller : controllers)
-			{
-				int score = getHookedControllerSelectionScore(controller.get());
-				if (score == std::numeric_limits<int>::lowest())
-				{
-					continue;
-				}
-
-				if (bestController == nullptr || score > bestScore
-					|| (score == bestScore && controller->serial < bestController->serial))
-				{
-					bestController = controller;
-					bestScore = score;
-				}
-			}
-		}
+		auto bestController = findBestHookedController(
+			side, getRequestedSkeletalTrackingLevel(), preferredSerial, false);
 
 		auto previousController = mPreferredHookedControllers[side].load();
 		if (previousController != bestController)
@@ -1182,6 +1150,89 @@ namespace HOL
 		}
 
 		mPreferredHookedControllers[side].store(bestController);
+	}
+
+	void HandOfLesser::refreshForwardedHandTrackingController(HOL::HandSide side)
+	{
+		if (side < 0 || side >= HOL::HandSide_MAX)
+		{
+			return;
+		}
+
+		// Full skeletal tracking distinguishes native hand-tracking devices from normal controllers.
+		// Only SteamVR runtime sessions need their data forwarded back to the application.
+		auto bestController = Runtime.isSteamVR
+			? findBestHookedController(side, vr::VRSkeletalTracking_Full, "", true)
+			: nullptr;
+		auto previousController = mForwardedHandTrackingControllers[side].load();
+		mForwardedHandTrackingControllers[side].store(bestController);
+		if (previousController != bestController)
+		{
+			const char* sideName = side == HandSide::LeftHand ? "left" : "right";
+			DriverLog("Forwarded SteamVR %s hand source changed: %s -> %s",
+					  sideName,
+					  previousController ? previousController->serial.c_str() : "(none)",
+					  bestController ? bestController->serial.c_str() : "(none)");
+			notifySteamVRHandTracking();
+		}
+	}
+
+	bool HandOfLesser::isForwardedHandTrackingController(
+		const HookedController* controller) const
+	{
+		if (controller == nullptr || controller->mSide < HandSide::LeftHand
+			|| controller->mSide >= HandSide::HandSide_MAX)
+		{
+			return false;
+		}
+
+		return mForwardedHandTrackingControllers[controller->mSide].load().get() == controller;
+	}
+
+	std::shared_ptr<HookedController> HandOfLesser::findBestHookedController(
+		HOL::HandSide side,
+		vr::EVRSkeletalTrackingLevel requestedTrackingLevel,
+		const std::string& preferredSerial,
+		bool requireExactTrackingLevel) const
+	{
+		auto controllers = getHookedControllers(side);
+		if (!preferredSerial.empty())
+		{
+			for (const auto& controller : controllers)
+			{
+				if (controller->serial == preferredSerial)
+				{
+					return controller;
+				}
+			}
+		}
+
+		std::shared_ptr<HookedController> bestController;
+		int bestScore = std::numeric_limits<int>::lowest();
+		for (const auto& controller : controllers)
+		{
+			if (requireExactTrackingLevel
+				&& controller->mSkeletonTrackingLevel != requestedTrackingLevel)
+			{
+				continue;
+			}
+
+			const int score
+				= getHookedControllerSelectionScore(controller.get(), requestedTrackingLevel);
+			if (score == std::numeric_limits<int>::lowest())
+			{
+				continue;
+			}
+
+			if (bestController == nullptr || score > bestScore
+				|| (score == bestScore && controller->serial < bestController->serial))
+			{
+				bestController = controller;
+				bestScore = score;
+			}
+		}
+
+		return bestController;
 	}
 
 	void HandOfLesser::refreshRecoveryHookedController(HOL::HandSide side)
@@ -1243,7 +1294,9 @@ namespace HOL
 		return Config.skeletal.trackingLevel;
 	}
 
-	int HandOfLesser::getHookedControllerSelectionScore(HookedController* controller) const
+	int HandOfLesser::getHookedControllerSelectionScore(
+		HookedController* controller,
+		vr::EVRSkeletalTrackingLevel requestedTrackingLevel) const
 	{
 		if (controller == nullptr)
 		{
@@ -1254,9 +1307,8 @@ namespace HOL
 
 		if (Runtime.isSteamVR)
 		{
-			//SteamVR runtime should only be used if we are using Steam Link.
-			// Since we cannot submit poses, we should only possess the existing hand tracking controllers.
-			// We only do tihs for the purpose of possessing input.
+			// SteamVR-runtime sources must be actively submitting a healthy native pose. Full skeletal
+			// devices are preferred because they are the native hand-tracking controller pair.
 			if (!controller->nativePoseHealthy())
 			{
 				return std::numeric_limits<int>::lowest();
@@ -1276,8 +1328,7 @@ namespace HOL
 			score -= 1000;
 		}
 
-		bool wantsFullTracking
-			= getRequestedSkeletalTrackingLevel() == vr::VRSkeletalTracking_Full;
+		bool wantsFullTracking = requestedTrackingLevel == vr::VRSkeletalTracking_Full;
 		bool controllerProvidesFullTracking
 			= controller->mSkeletonTrackingLevel == vr::VRSkeletalTracking_Full;
 
@@ -1578,6 +1629,10 @@ namespace HOL
 		if (HandOfLesser::Current->Config.handPose.controllerMode
 			== ControllerMode::EmulateControllerMode)
 		{
+			// Hand pose packets stop when tracking becomes stale. Advance the hand/controller
+			// transition debounce here so the final tracked=false packet can still take effect.
+			updateControllerConnectionStates();
+
 			// TODO: only run if using index controller
 			EmulatedControllerDriver* leftController = this->getEmulatedController(HandSide::LeftHand);
 			EmulatedControllerDriver* rightController
@@ -1652,6 +1707,113 @@ namespace HOL
 		}
 	}
 
+	void HandOfLesser::notifySteamVRHandTracking()
+	{
+		mSteamVRHandTrackingPending.store(true);
+		mSteamVRHandTrackingCondition.notify_one();
+	}
+
+	void HandOfLesser::requestSteamVRHandTrackingResync()
+	{
+		mSteamVRHandTrackingResync.store(true);
+		mSteamVRHandTrackingPending.store(true);
+		mSteamVRHandTrackingCondition.notify_one();
+	}
+
+	// Hooks only publish snapshots and wake this thread. Conversion and pipe I/O must not run on
+	// another driver's pose/skeleton callback thread.
+	void HandOfLesser::steamVRHandTrackingThread()
+	{
+		std::array<HookedController::ForwardedHandState, HandSide::HandSide_MAX>
+			forwardingStates{};
+		std::array<std::shared_ptr<HookedController>, HandSide::HandSide_MAX> sources{};
+		auto nextWakeTime = (std::chrono::steady_clock::time_point::min)();
+		while (mActive.load())
+		{
+			if (nextWakeTime != (std::chrono::steady_clock::time_point::min)())
+			{
+				std::unique_lock lock(mSteamVRHandTrackingMutex);
+				const auto shouldWake = [this]() {
+					return !mActive.load() || mSteamVRHandTrackingPending.load()
+						|| mSteamVRHandTrackingResync.load();
+				};
+				if (nextWakeTime == (std::chrono::steady_clock::time_point::max)())
+				{
+					mSteamVRHandTrackingCondition.wait(lock, shouldWake);
+				}
+				else
+				{
+					mSteamVRHandTrackingCondition.wait_until(lock, nextWakeTime, shouldWake);
+				}
+			}
+
+			if (!mActive.load())
+			{
+				break;
+			}
+
+			// Send a full baseline when the skeleton changes, then smaller pose-only updates. Pose
+			// callbacks can run much faster than skeletal callbacks, so keeping them separate avoids
+			// repeatedly transmitting and converting the complete skeleton.
+			mSteamVRHandTrackingPending.exchange(false);
+			const bool forceResync = mSteamVRHandTrackingResync.exchange(false);
+			const auto now = std::chrono::steady_clock::now();
+			const auto hmd = getHMD();
+			const auto hmdPose = hmd ? hmd->getForwardedPose() : std::nullopt;
+			nextWakeTime = (std::chrono::steady_clock::time_point::max)();
+			for (int sideIndex = 0; sideIndex < HandSide::HandSide_MAX; sideIndex++)
+			{
+				auto selectedSource = mForwardedHandTrackingControllers[sideIndex].load();
+				if (selectedSource)
+				{
+					sources[sideIndex] = selectedSource;
+				}
+
+				auto& source = sources[sideIndex];
+				if (!source)
+				{
+					continue;
+				}
+
+				auto updates = source->getForwardedHandUpdates(
+					forwardingStates[sideIndex],
+					Runtime.isSteamVR && selectedSource == source,
+					forceResync,
+					now);
+				nextWakeTime = (std::min)(nextWakeTime, updates.staleDeadline);
+
+				if (updates.baseline)
+				{
+					if (hmdPose)
+					{
+						updates.baseline->hasHmdPose = true;
+						updates.baseline->hmdPose = *hmdPose;
+					}
+					mTransport.sendPayload<NativePacketType::SteamVRHandBaseline>(
+						*updates.baseline);
+				}
+
+				if (updates.pose)
+				{
+					if (hmdPose)
+					{
+						updates.pose->hasHmdPose = true;
+						updates.pose->hmdPose = *hmdPose;
+					}
+					mTransport.sendPayload<NativePacketType::SteamVRHandPose>(*updates.pose);
+				}
+
+				// Retain a removed source until it emits one inactive baseline. Otherwise the app
+				// would keep using the last active sample indefinitely.
+				if (!selectedSource && !forwardingStates[sideIndex].active)
+				{
+					source.reset();
+					forwardingStates[sideIndex] = {};
+				}
+			}
+		}
+	}
+
 	void HandOfLesser::cleanup()
 	{
 		mAppLauncher.stop();
@@ -1665,8 +1827,14 @@ namespace HOL
 
 		// Signal the receive thread to stop before waiting for it to exit.
 		this->mActive.store(false);
+		mSteamVRHandTrackingCondition.notify_all();
+		if (my_pose_update_thread_.joinable())
 		{
 			my_pose_update_thread_.join();
+		}
+		if (mSteamVRHandTrackingThread.joinable())
+		{
+			mSteamVRHandTrackingThread.join();
 		}
 
 		// Our controller devices will have already deactivated. Let's now destroy them.

@@ -11,8 +11,6 @@
 
 namespace HOL::SteamVR
 {
-
-	XrHandJointEXT ovrJointToOpenXR(HandSkeletonBone ovrBone);
 	void getOpenXRJointLocation(XrHandJointLocationEXT* openXRJoints,
 								HandSkeletonBone ovrBone,
 								HOL::PoseLocation& out);

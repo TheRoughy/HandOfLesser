@@ -2226,7 +2226,7 @@ void HOL::UserInterface::buildMain()
 
 	bool steamVrRuntime = HOL::state::Runtime.isSteamVR;
 	int displayedControllerMode = HOL::Config.handPose.controllerMode;
-	if (steamVrRuntime && displayedControllerMode == HOL::ControllerMode::EmulateControllerMode)
+	if (steamVrRuntime && displayedControllerMode == HOL::ControllerMode::HookedControllerMode)
 	{
 		displayedControllerMode = HOL::ControllerMode::NoControllerMode;
 	}
@@ -2239,7 +2239,7 @@ void HOL::UserInterface::buildMain()
 	{
 		const HOL::ControllerMode buttonMode = std::get<1>(buttonContent);
 		const bool modeDisabled
-			= steamVrRuntime && buttonMode == HOL::ControllerMode::EmulateControllerMode;
+			= steamVrRuntime && buttonMode == HOL::ControllerMode::HookedControllerMode;
 		if (modeDisabled)
 		{
 			ImGui::BeginDisabled();
@@ -2251,11 +2251,6 @@ void HOL::UserInterface::buildMain()
 		{
 			HOL::Config.handPose.controllerMode
 				= static_cast<HOL::ControllerMode>(displayedControllerMode);
-			if (HOL::state::Runtime.isSteamVR
-				&& HOL::Config.handPose.controllerMode == HOL::ControllerMode::HookedControllerMode)
-			{
-				HOL::Config.handPose.possessionBehavior = HOL::PossessionBehavior_Input;
-			}
 			HOL::HandOfLesserCore::Current->syncSettings();
 		}
 
@@ -2268,9 +2263,8 @@ void HOL::UserInterface::buildMain()
 		{
 			if (modeDisabled)
 			{
-				showWrappedTooltip(
-					"You cannot use SteamVR OpenXR data to drive SteamVR controllers; this creates "
-					"a feedback loop. You can only use Possess mode with input only.");
+				showWrappedTooltip("SteamVR hand-tracking controllers use a nonstandard input "
+								   "profile. Use a separate emulated controller for normal inputs.");
 			}
 			else
 			{
@@ -2369,9 +2363,8 @@ void HOL::UserInterface::buildMain()
 	if (possessionLockedBySteamVR
 		&& ImGui::IsMouseHoveringRect(possessionGroupStart, possessionGroupEnd))
 	{
-		showWrappedTooltip(
-			"You cannot use SteamVR OpenXR data to drive SteamVR controllers; this creates "
-			"a feedback loop. You can only use Possess mode with input only.");
+		showWrappedTooltip("Possession is unavailable with the SteamVR runtime. Use a separate "
+						   "emulated controller for normal inputs.");
 	}
 
 	ImGui::EndChild();

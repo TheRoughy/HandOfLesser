@@ -247,15 +247,31 @@ namespace HOL::hooks
 					controller->mLastOriginalPoseSubmitTimeMs = nowMs;
 				}
 
+				// This submission is current before validity changes refresh cached controller
+				// selections, so the selector must not see the previous frame age.
+				controller->framesSinceLastPoseUpdate = 0;
 				controller->setLastOriginalPoseState(newPoseValid);
+				const bool forwardedHandTrackingController
+					= HOL::HandOfLesser::Current->isForwardedHandTrackingController(
+						controller.get());
+				const bool forwardedTrackingReference
+					= controller->mDeviceClass == vr::TrackedDeviceClass_HMD;
+				if (HOL::HandOfLesser::Runtime.isSteamVR
+					&& (forwardedHandTrackingController || forwardedTrackingReference))
+				{
+					// Keep the HMD alongside the hand source so the app can align SteamVR's raw
+					// driver space to its OpenXR stage space. Pipe I/O remains deferred.
+					if (controller->cacheForwardedPose(newPose, newPoseValid)
+						&& forwardedHandTrackingController)
+					{
+						HOL::HandOfLesser::Current->notifySteamVRHandTracking();
+					}
+				}
 
 				if (newPoseValid)
 				{
 					controller->lastOriginalPose = newPose;
 				}
-
-				// reset frame counter
-				controller->framesSinceLastPoseUpdate = 0;
 
 				if (config.steamvr.showDevicePoseDiagnostics)
 				{
@@ -436,7 +452,8 @@ namespace HOL::hooks
 			{
 				controller->driverInput = _this;
 
-				controller->registerSkeletonInput(*pHandle, eSkeletalTrackingLevel, pchName);
+				controller->registerSkeletonInput(
+					*pHandle, eSkeletalTrackingLevel, pchName, pchBasePosePath);
 
 				ControllerInputHandle input = {.inputPath = pchName,
 											   .type = ControllerInputType::Skeleton,
@@ -602,13 +619,26 @@ namespace HOL::hooks
 
 			if (controller != nullptr)
 			{
+				if (HandOfLesser::Runtime.isSteamVR
+					&& HandOfLesser::Current->isForwardedHandTrackingController(
+						controller.get()))
+				{
+					// Skeletal and pose updates can arrive independently, so publish this
+					// snapshot without waiting for the next pose callback.
+					if (controller->cacheForwardedSkeleton(
+							eMotionRange, pTransforms, unTransformCount))
+					{
+						HandOfLesser::Current->notifySteamVRHandTracking();
+					}
+				}
+
 				if (controller->isAugmentedSkeletonActive())
 				{
 					return vr::VRInputError_None;
 				}
 
-				// The app does not submit its own skeletal data when using the SteamVR OpenXR runtime,
-				// so native controller skeleton updates must still be allowed through in that case.
+				// SteamVR-runtime skeletal data is forwarded back to separate emulated controllers,
+				// so the native source controller's own updates must still pass through unchanged.
 				bool submittingSkeletalInput = !HandOfLesser::Runtime.isSteamVR;
 
 				// While possessing a hooked controller, the app is already submitting the skeletal
@@ -619,7 +649,6 @@ namespace HOL::hooks
 				{
 					return vr::VRInputError_None;
 				}
-
 			}
 
 			return UpdateSkeletonComponent::FunctionHook.originalFunc(
