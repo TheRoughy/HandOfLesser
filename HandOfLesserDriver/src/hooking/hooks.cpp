@@ -156,6 +156,9 @@ namespace HOL::hooks
 			// DriverLog("PollNextEvent!");
 			auto ret = PollNextEvent::FunctionHook.originalFunc(_this, pEvent, uncbVREvent);
 
+			/*
+			 * Disabled because Vive's side assignment conventions do not match this
+			 * position-based estimation, producing incorrect results and repeated logs.
 			if (ret)
 			{
 				if (pEvent->eventType == vr::EVREventType::VREvent_TrackedDeviceRoleChanged)
@@ -165,6 +168,7 @@ namespace HOL::hooks
 					HandOfLesser::Current->requestEstimateControllerSide();
 				}
 			}
+			*/
 
 			return ret;
 		}
