@@ -322,8 +322,7 @@ namespace HOL::hooks
 						return;
 					}
 
-					if (config.handPose.possessionBehavior != PossessionBehavior_Input
-						&& HOL::HandOfLesser::Current->shouldPossessInput(controller.get())
+					if (HOL::HandOfLesser::Current->shouldPossessInput(controller.get())
 						&& !shouldSubmitFallbackPose && newPoseValid)
 					{
 						// In fallback-only mode we keep the native pose while it is healthy and

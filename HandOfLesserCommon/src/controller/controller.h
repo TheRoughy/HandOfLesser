@@ -62,7 +62,6 @@ namespace HOL
 	{
 		PossessionBehavior_Full,
 		PossessionBehavior_Fallback,
-		PossessionBehavior_Input,
 		PossessionBehavior_MAX
 	};
 

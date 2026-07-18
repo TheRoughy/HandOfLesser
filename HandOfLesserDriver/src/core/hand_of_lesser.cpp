@@ -121,10 +121,6 @@ namespace HOL
 					mLastHandTransforms[sideIndex] = payload;
 					mHasHandTransform[sideIndex] = payload.valid;
 
-					const bool inputOnlyHookedMode
-						= Config.handPose.controllerMode == ControllerMode::HookedControllerMode
-						  && Config.handPose.possessionBehavior == PossessionBehavior_Input;
-
 					if (Config.handPose.controllerMode != ControllerMode::HookedControllerMode)
 					{
 						if (auto hooked = getHookedController(payload.side))
@@ -136,7 +132,7 @@ namespace HOL
 					std::shared_ptr<HookedController> hookedControllerOwner;
 					GenericControllerInterface* controller
 						= this->GetActiveController(payload.side, hookedControllerOwner);
-					if (controller != nullptr && !inputOnlyHookedMode)
+					if (controller != nullptr)
 					{
 						controller->UpdatePose(&payload);
 						controller->SubmitPose();
@@ -576,8 +572,7 @@ namespace HOL
 		const bool hookedMode
 			= Config.handPose.controllerMode == ControllerMode::HookedControllerMode;
 
-		if (hookedMode && forceUpdate
-			&& Config.handPose.possessionBehavior != PossessionBehavior_Input)
+		if (hookedMode && forceUpdate)
 		{
 			auto hookedControllers = mHookedControllers.load();
 			for (const auto& hooked : *hookedControllers)
@@ -758,11 +753,6 @@ namespace HOL
 			return false;
 		}
 
-		if (Config.handPose.possessionBehavior == PossessionBehavior_Input)
-		{
-			return false;
-		}
-
 		const bool fallbackOnlyActive
 			= Config.handPose.possessionBehavior == PossessionBehavior_Fallback;
 		return !fallbackOnlyActive || !controller->nativePoseHealthy();
@@ -874,12 +864,6 @@ namespace HOL
 		}
 
 		if (Config.handPose.controllerMode != ControllerMode::HookedControllerMode)
-		{
-			return false;
-		}
-
-		// Input-only possession must never alter the native controller's pose or connection state.
-		if (Config.handPose.possessionBehavior == PossessionBehavior_Input)
 		{
 			return false;
 		}

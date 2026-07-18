@@ -2298,10 +2298,6 @@ void HOL::UserInterface::buildMain()
 	const bool possessionLockedBySteamVR = steamVrRuntime;
 
 	int possessionBehavior = Config.handPose.possessionBehavior;
-	if (possessionLockedBySteamVR)
-	{
-		possessionBehavior = HOL::PossessionBehavior_Input;
-	}
 
 	ImGui::BeginDisabled(!hookedModeActive || steamVrRuntime);
 
@@ -2344,19 +2340,6 @@ void HOL::UserInterface::buildMain()
 		}
 	}
 
-	if (ImGui::RadioButton("Input", &possessionBehavior, HOL::PossessionBehavior_Input))
-	{
-		Config.handPose.possessionBehavior
-			= static_cast<HOL::PossessionBehavior>(possessionBehavior);
-		HOL::HandOfLesserCore::Current->syncSettings();
-	}
-	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-	{
-		if (!possessionLockedBySteamVR)
-		{
-			showWrappedTooltip("Possess controller input only");
-		}
-	}
 	ImVec2 possessionGroupEnd = ImGui::GetItemRectMax();
 	ImGui::EndDisabled();
 
