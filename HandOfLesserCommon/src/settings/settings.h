@@ -317,9 +317,22 @@ namespace HOL
 			float steamPoseTimeOffsetMS = 15.0f;
 			float positionSmoothingMS = 40.0f;
 			float rotationSmoothingMS = 5.0f;
+			float positionJitterRadiusMM = 0.0f;
+			float rotationJitterRadiusDegrees = 0.0f;
 			float linearVelocityMultiplier = 1.0f;
 			float angularVelocityMultiplier = 0.1f;
 		};
+
+		inline SteamVRPoseSmoothingSettings defaultSteamVRPoseSmoothingSettings(bool oculus)
+		{
+			SteamVRPoseSmoothingSettings settings;
+			if (oculus)
+			{
+				settings.positionJitterRadiusMM = 7.0f;
+				settings.rotationJitterRadiusDegrees = 10.0f;
+			}
+			return settings;
+		}
 
 		struct SteamVRSettings
 		{
@@ -330,9 +343,12 @@ namespace HOL
 			bool blockControllerInputWhileHandTracking = true;
 			bool disableOtherControllersWhileHandTracking = true;
 			bool showDevicePoseDiagnostics = false;
-			SteamVRPoseSmoothingSettings poseSmoothing;
-			float positionJitterRadiusMM = 7.0f;
-			float rotationJitterRadiusDegrees = 10.0f;
+			SteamVRPoseSmoothingSettings poseSmoothing
+				= defaultSteamVRPoseSmoothingSettings(false);
+			SteamVRPoseSmoothingSettings standardPoseSmoothing
+				= defaultSteamVRPoseSmoothingSettings(false);
+			SteamVRPoseSmoothingSettings oculusPoseSmoothing
+				= defaultSteamVRPoseSmoothingSettings(true);
 			bool triggerStabilization = true;
 			float triggerStabilizationSmoothingMS = 200.0f;
 			float triggerStabilizationFalloffMS = 500.0f;

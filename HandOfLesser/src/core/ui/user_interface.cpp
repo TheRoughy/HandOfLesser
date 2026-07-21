@@ -1424,6 +1424,8 @@ void HOL::UserInterface::buildSteamVR()
 									&Config.steamvr.disableOtherControllersWhileHandTracking);
 
 	ImGui::SeparatorText("General");
+	ImGui::TextDisabled(
+		"Pose smoothing profile: %s", state::Runtime.isOVR ? "Oculus" : "Standard");
 
 	syncSettings |= ImGui::InputFloat("Steam Pose offset (ms)",
 									  &Config.steamvr.poseSmoothing.steamPoseTimeOffsetMS,
@@ -1446,13 +1448,13 @@ void HOL::UserInterface::buildSteamVR()
 									  5.0f,
 									  "%.0f");
 	if (ImGui::InputFloat("Position jitter filter (mm)",
-						  &Config.steamvr.positionJitterRadiusMM,
+						  &Config.steamvr.poseSmoothing.positionJitterRadiusMM,
 						  0.1f,
 						  0.5f,
 						  "%.1f"))
 	{
-		Config.steamvr.positionJitterRadiusMM
-			= std::max(0.0f, Config.steamvr.positionJitterRadiusMM);
+		Config.steamvr.poseSmoothing.positionJitterRadiusMM
+			= std::max(0.0f, Config.steamvr.poseSmoothing.positionJitterRadiusMM);
 		syncSettings = true;
 	}
 	if (ImGui::IsItemHovered())
@@ -1460,13 +1462,13 @@ void HOL::UserInterface::buildSteamVR()
 		showWrappedTooltip("Suppress small hand-position corrections.");
 	}
 	if (ImGui::InputFloat("Rotation jitter filter (deg)",
-						  &Config.steamvr.rotationJitterRadiusDegrees,
+						  &Config.steamvr.poseSmoothing.rotationJitterRadiusDegrees,
 						  0.1f,
 						  0.5f,
 						  "%.1f"))
 	{
-		Config.steamvr.rotationJitterRadiusDegrees
-			= std::max(0.0f, Config.steamvr.rotationJitterRadiusDegrees);
+		Config.steamvr.poseSmoothing.rotationJitterRadiusDegrees
+			= std::max(0.0f, Config.steamvr.poseSmoothing.rotationJitterRadiusDegrees);
 		syncSettings = true;
 	}
 	if (ImGui::IsItemHovered())
@@ -1521,9 +1523,8 @@ void HOL::UserInterface::buildSteamVR()
 	if (rightAlignButton("Reset##SteamVRGeneral"))
 	{
 		HOL::settings::SteamVRSettings steamVrDefaults;
-		Config.steamvr.poseSmoothing = steamVrDefaults.poseSmoothing;
-		Config.steamvr.positionJitterRadiusMM = steamVrDefaults.positionJitterRadiusMM;
-		Config.steamvr.rotationJitterRadiusDegrees = steamVrDefaults.rotationJitterRadiusDegrees;
+		Config.steamvr.poseSmoothing
+			= HOL::settings::defaultSteamVRPoseSmoothingSettings(state::Runtime.isOVR);
 		Config.steamvr.triggerStabilization = steamVrDefaults.triggerStabilization;
 		Config.steamvr.triggerStabilizationSmoothingMS
 			= steamVrDefaults.triggerStabilizationSmoothingMS;

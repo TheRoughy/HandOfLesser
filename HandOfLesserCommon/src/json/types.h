@@ -270,6 +270,8 @@ namespace HOL
 			j = {{"steamPoseTimeOffsetMS", settings.steamPoseTimeOffsetMS},
 				 {"positionSmoothingMS", settings.positionSmoothingMS},
 				 {"rotationSmoothingMS", settings.rotationSmoothingMS},
+				 {"positionJitterRadiusMM", settings.positionJitterRadiusMM},
+				 {"rotationJitterRadiusDegrees", settings.rotationJitterRadiusDegrees},
 				 {"linearVelocityMultiplier", settings.linearVelocityMultiplier},
 				 {"angularVelocityMultiplier", settings.angularVelocityMultiplier}};
 		}
@@ -280,6 +282,10 @@ namespace HOL
 				j, "steamPoseTimeOffsetMS", settings.steamPoseTimeOffsetMS);
 			nlohmann::get_to_if_present(j, "positionSmoothingMS", settings.positionSmoothingMS);
 			nlohmann::get_to_if_present(j, "rotationSmoothingMS", settings.rotationSmoothingMS);
+			nlohmann::get_to_if_present(
+				j, "positionJitterRadiusMM", settings.positionJitterRadiusMM);
+			nlohmann::get_to_if_present(
+				j, "rotationJitterRadiusDegrees", settings.rotationJitterRadiusDegrees);
 			nlohmann::get_to_if_present(
 				j, "linearVelocityMultiplier", settings.linearVelocityMultiplier);
 			nlohmann::get_to_if_present(
@@ -298,8 +304,8 @@ namespace HOL
 				  settings.disableOtherControllersWhileHandTracking},
 				 {"showDevicePoseDiagnostics", settings.showDevicePoseDiagnostics},
 				 {"poseSmoothing", settings.poseSmoothing},
-				 {"positionJitterRadiusMM", settings.positionJitterRadiusMM},
-				 {"rotationJitterRadiusDegrees", settings.rotationJitterRadiusDegrees},
+				 {"standardPoseSmoothing", settings.standardPoseSmoothing},
+				 {"oculusPoseSmoothing", settings.oculusPoseSmoothing},
 				 {"triggerStabilization", settings.triggerStabilization},
 				 {"triggerStabilizationSmoothingMS", settings.triggerStabilizationSmoothingMS},
 				 {"triggerStabilizationFalloffMS", settings.triggerStabilizationFalloffMS},
@@ -325,9 +331,9 @@ namespace HOL
 				j, "showDevicePoseDiagnostics", settings.showDevicePoseDiagnostics);
 			nlohmann::get_to_if_present(j, "poseSmoothing", settings.poseSmoothing);
 			nlohmann::get_to_if_present(
-				j, "positionJitterRadiusMM", settings.positionJitterRadiusMM);
+				j, "standardPoseSmoothing", settings.standardPoseSmoothing);
 			nlohmann::get_to_if_present(
-				j, "rotationJitterRadiusDegrees", settings.rotationJitterRadiusDegrees);
+				j, "oculusPoseSmoothing", settings.oculusPoseSmoothing);
 
 			nlohmann::get_to_if_present(
 				j, "triggerStabilization", settings.triggerStabilization);

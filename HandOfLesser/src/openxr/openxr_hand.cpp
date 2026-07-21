@@ -473,9 +473,10 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 			filterParameters.rotationSmoothingMS
 				= HOL::Config.steamvr.poseSmoothing.rotationSmoothingMS
 				  + triggerStabilizationSmoothingMS;
-			filterParameters.positionJitterRadiusMM = HOL::Config.steamvr.positionJitterRadiusMM;
+			filterParameters.positionJitterRadiusMM
+				= HOL::Config.steamvr.poseSmoothing.positionJitterRadiusMM;
 			filterParameters.rotationJitterRadiusDegrees
-				= HOL::Config.steamvr.rotationJitterRadiusDegrees;
+				= HOL::Config.steamvr.poseSmoothing.rotationJitterRadiusDegrees;
 			// A tracked-state transition invalidates orientation history, but a still-valid
 			// position can remain continuous through the transition.
 			filterParameters.resetPosition

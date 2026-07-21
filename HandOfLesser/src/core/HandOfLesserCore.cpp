@@ -102,6 +102,11 @@ void HandOfLesserCore::init(int serverPort)
 				  << std::endl;
 	}
 
+	// Runtime profiles keep Oculus jitter filtering independent from runtimes whose data is
+	// already stable at high update rates.
+	Config.steamvr.poseSmoothing = runtimeState.isOVR ? Config.steamvr.oculusPoseSmoothing
+											 : Config.steamvr.standardPoseSmoothing;
+
 	this->mInstanceHolder.init();
 	runtimeState.openxrState = this->mInstanceHolder.getState();
 
@@ -736,6 +741,10 @@ void HOL::HandOfLesserCore::syncState()
 
 void HOL::HandOfLesserCore::saveSettings()
 {
+	auto& poseSmoothing = state::Runtime.isOVR ? Config.steamvr.oculusPoseSmoothing
+											 : Config.steamvr.standardPoseSmoothing;
+	poseSmoothing = Config.steamvr.poseSmoothing;
+
 	std::ofstream file(HOL::Paths::getSettingsFilePath());
 	nlohmann::json j = Config;
 	file << j.dump(4); // indented
