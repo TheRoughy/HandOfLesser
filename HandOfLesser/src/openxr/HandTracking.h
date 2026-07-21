@@ -24,7 +24,8 @@ namespace HOL::OpenXR
 		void updateHands(xr::UniqueDynamicSpace& space,
 					 XrTime time,
 					 OpenXRBody& bodyTracker,
-					 const HOL::PoseLocation* hmdPose);
+					 const HOL::PoseLocation* hmdPose,
+					 bool skeletalUpdate);
 		void updateInputs();
 		HOL::HandTransformPayload getTransformPayload(HOL::HandSide side);
 		HOL::HandPose& getHandPose(HOL::HandSide side);

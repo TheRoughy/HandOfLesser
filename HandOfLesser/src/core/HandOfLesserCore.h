@@ -71,9 +71,9 @@ namespace HOL
 		void receiveDataThread();
 
 		void mainLoop();
-		void doOpenXRStuff();
+		void doOpenXRStuff(bool skeletalUpdate);
 		void sendOscData();
-		void sendUpdate();
+		void sendUpdate(bool skeletalUpdate);
 		void sendBodyTrackerData();
 		void sendSettingsNow();
 		void flushSettings(bool force = false);

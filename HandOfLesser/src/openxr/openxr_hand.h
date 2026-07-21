@@ -21,6 +21,7 @@ public:
 		XrTime time,
 		OpenXRBody& bodyTracker,
 		float triggerStabilizationSmoothingMS,
+		bool skeletalUpdate,
 		const HOL::HandTrackingSample* externalSample = nullptr);
 
 	HandPose handPose{};

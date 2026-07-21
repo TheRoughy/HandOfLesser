@@ -474,9 +474,14 @@ void HandOfLesserCore::mainLoop()
 	}
 
 	HOL::HighResolutionTimer updateTimer;
+	HOL::IntervalTimer skeletalUpdateTimer;
 
 	while (1)
 	{
+		// Palm poses follow the main loop cadence; finger, body, input, and OSC work shares this
+		// lower-frequency tick.
+		const bool skeletalUpdate = skeletalUpdateTimer.isDue(std::chrono::milliseconds(
+			std::max(Config.general.skeletalUpdateIntervalMS, 1)));
 		this->mUserInterface.Current->getVisualizer()->clearDrawQueue();
 
 		if (this->shouldTerminate())
@@ -486,12 +491,15 @@ void HandOfLesserCore::mainLoop()
 
 		if (this->mInstanceHolder.getState() == OpenXrState::Running)
 		{
-			doOpenXRStuff();
-			sendOscData();
+			doOpenXRStuff(skeletalUpdate);
+			if (skeletalUpdate)
+			{
+				sendOscData();
+			}
 		}
 		else
 		{
-			if (Config.vrchat.sendDebugOsc)
+			if (skeletalUpdate && Config.vrchat.sendDebugOsc)
 			{
 				sendOscData();
 			}
@@ -526,7 +534,7 @@ void HandOfLesserCore::mainLoop()
 	}
 }
 
-void HandOfLesserCore::doOpenXRStuff()
+void HandOfLesserCore::doOpenXRStuff(bool skeletalUpdate)
 {
 	XrTime time = this->mInstanceHolder.getTime();
 	time += 1000000LL * (XrTime)Config.general.motionPredictionMS;
@@ -539,28 +547,41 @@ void HandOfLesserCore::doOpenXRStuff()
 	}
 
 	HOL::PoseLocation hmdPose;
-	const bool hmdPoseValid
-		= this->mInstanceHolder.getHmdPose(this->mInstanceHolder.mStageSpace.get(), time, hmdPose);
-	const std::array<const HOL::HandPose*, HOL::HandSide_MAX> lastHandPoses = {
-		&this->mHandTracking.getHandPose(HOL::HandSide::LeftHand),
-		&this->mHandTracking.getHandPose(HOL::HandSide::RightHand),
-	};
-	this->mBodyTracking.updateBody(
-		this->mInstanceHolder.mStageSpace,
-		time,
-		hmdPoseValid ? &hmdPose : nullptr,
-		lastHandPoses);
+	bool hmdPoseValid = false;
+	if (skeletalUpdate || HOL::state::Runtime.isSteamVR)
+	{
+		hmdPoseValid = this->mInstanceHolder.getHmdPose(
+			this->mInstanceHolder.mStageSpace.get(), time, hmdPose);
+	}
+
+	if (skeletalUpdate)
+	{
+		const std::array<const HOL::HandPose*, HOL::HandSide_MAX> lastHandPoses = {
+			&this->mHandTracking.getHandPose(HOL::HandSide::LeftHand),
+			&this->mHandTracking.getHandPose(HOL::HandSide::RightHand),
+		};
+		this->mBodyTracking.updateBody(
+			this->mInstanceHolder.mStageSpace,
+			time,
+			hmdPoseValid ? &hmdPose : nullptr,
+			lastHandPoses);
+	}
 	this->mHandTracking.updateHands(
 		this->mInstanceHolder.mStageSpace,
 		time,
 		this->mBodyTracking.getBodyTracker(),
-		hmdPoseValid ? &hmdPose : nullptr);
-	this->mHandTracking.updateInputs();
+		hmdPoseValid ? &hmdPose : nullptr,
+		skeletalUpdate);
 
-	// Periodic check for tracking features
-	this->featuresManager.performPeriodicCheck();
+	if (skeletalUpdate)
+	{
+		this->mHandTracking.updateInputs();
 
-	this->sendUpdate();
+		// Periodic check for tracking features
+		this->featuresManager.performPeriodicCheck();
+	}
+
+	this->sendUpdate(skeletalUpdate);
 
 	return;
 }
@@ -624,7 +645,7 @@ void HOL::HandOfLesserCore::sendOscData()
 	}
 }
 
-void HandOfLesserCore::sendUpdate()
+void HandOfLesserCore::sendUpdate(bool skeletalUpdate)
 {
 
 	if (Config.handPose.controllerMode != ControllerMode::NoControllerMode)
@@ -642,6 +663,12 @@ void HandOfLesserCore::sendUpdate()
 					transformPayload);
 			}
 		}
+	}
+
+	if (!skeletalUpdate)
+	{
+		// Pose-only iterations stop after forwarding the latest palm transform.
+		return;
 	}
 
 	if (Config.steamvr.sendSteamVRInput)

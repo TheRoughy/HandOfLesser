@@ -71,7 +71,8 @@ std::shared_ptr<BaseAction> HOL::OpenXR::HandTracking::getActionForBindingIndex(
 void HandTracking::updateHands(xr::UniqueDynamicSpace& space,
 						   XrTime time,
 						   OpenXRBody& bodyTracker,
-						   const HOL::PoseLocation* hmdPose)
+						   const HOL::PoseLocation* hmdPose,
+						   bool skeletalUpdate)
 {
 	auto now = std::chrono::steady_clock::now();
 	const HOL::HandTrackingSample* leftSample = nullptr;
@@ -81,22 +82,29 @@ void HandTracking::updateHands(xr::UniqueDynamicSpace& space,
 		// Querying OpenXR here would feed our emulated hands back into themselves. Reconstruct the
 		// hand from full-skeleton controllers observed by the driver instead.
 		leftSample = mSteamVRHandTrackingSource.getSample(
-			HOL::LeftHand, hmdPose, Config.handPose.applyBaseOffset);
+			HOL::LeftHand, hmdPose, Config.handPose.applyBaseOffset, skeletalUpdate);
 		rightSample = mSteamVRHandTrackingSource.getSample(
-			HOL::RightHand, hmdPose, Config.handPose.applyBaseOffset);
+			HOL::RightHand, hmdPose, Config.handPose.applyBaseOffset, skeletalUpdate);
 	}
 	this->mLeftHand.updateJointLocations(
 		space,
 		time,
 		bodyTracker,
 		getTriggerStabilizationSmoothingMS(HOL::LeftHand, now),
+		skeletalUpdate,
 		leftSample);
 	this->mRightHand.updateJointLocations(
 		space,
 		time,
 		bodyTracker,
 		getTriggerStabilizationSmoothingMS(HOL::RightHand, now),
+		skeletalUpdate,
 		rightSample);
+
+	if (!skeletalUpdate)
+	{
+		return;
+	}
 
 	// Populate gesture data
 	HOL::Gesture::GestureData data;

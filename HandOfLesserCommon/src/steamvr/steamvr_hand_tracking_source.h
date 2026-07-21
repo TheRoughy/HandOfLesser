@@ -15,7 +15,10 @@ namespace HOL::SteamVR
 		void updateBaseline(const HOL::SteamVRHandBaselinePayload& payload);
 		void updatePose(const HOL::SteamVRHandPosePayload& payload);
 		const HOL::HandTrackingSample*
-		getSample(HOL::HandSide side, const HOL::PoseLocation* openXRHmdPose, bool applyBaseOffset);
+		getSample(HOL::HandSide side,
+				  const HOL::PoseLocation* openXRHmdPose,
+				  bool applyBaseOffset,
+				  bool skeletalUpdate);
 		void applySourcePose(HOL::HandSide side, HOL::HandTransformPayload& payload) const;
 
 	private:

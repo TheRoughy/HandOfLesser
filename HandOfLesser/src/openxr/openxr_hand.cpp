@@ -187,6 +187,7 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 									  XrTime time,
 									  OpenXRBody& bodyTracker,
 									  float triggerStabilizationSmoothingMS,
+									  bool skeletalUpdate,
 									  const HOL::HandTrackingSample* externalSample)
 {
 	// Copy to prev
@@ -559,12 +560,6 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 				= HOL::rotateLocal(this->handPose.controllerLocation.orientation,
 								   HOL::quaternionFromEulerAnglesDegrees(userRotationOffset));
 
-			//////////////////////
-			// Finger movement
-			//////////////////////
-
-			this->calculateCurlSplay();
-
 			/////////////
 			// Prev
 			/////////////
@@ -592,14 +587,6 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 					= controllerTranslationOffset;
 				HOL::display::HandTransform[this->mSide].finalOrientationOffset
 					= controllerRotationOffset;
-
-				// Finger curl
-				for (int i = 0; i < FingerType_MAX; i++)
-				{
-					// Turns out you cannot assign an array to an array
-					HOL::display::FingerTracking[this->mSide].rawBend[i]
-						= this->handPose.fingers[i];
-				}
 			}
 		}
 	}
@@ -611,6 +598,17 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 		this->mPrevExternalUpdateGeneration = 0;
 		this->mLastPoseUpdateTime = {};
 		HOL::display::HandTransform[this->mSide].updateRateMS.store(0.0f);
+	}
+
+	if (skeletalUpdate && this->handPose.poseValid)
+	{
+		// Finger state can change while the palm remains still, so it follows the skeletal cadence
+		// rather than the palm staleness check above.
+		this->calculateCurlSplay();
+		for (int i = 0; i < FingerType_MAX; i++)
+		{
+			HOL::display::FingerTracking[this->mSide].rawBend[i] = this->handPose.fingers[i];
+		}
 	}
 
 	mPrevActive = this->handPose.active;

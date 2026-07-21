@@ -44,7 +44,8 @@ namespace HOL::SteamVR
 	const HOL::HandTrackingSample*
 	SteamVRHandTrackingSource::getSample(HOL::HandSide side,
 										 const HOL::PoseLocation* openXRHmdPose,
-										 bool applyBaseOffset)
+										 bool applyBaseOffset,
+										 bool skeletalUpdate)
 	{
 		if (side < HOL::LeftHand || side >= HOL::HandSide_MAX)
 		{
@@ -84,7 +85,7 @@ namespace HOL::SteamVR
 			return &state.sample;
 		}
 
-		if (skeletonChanged || sourceChanged)
+		if (skeletalUpdate && (skeletonChanged || sourceChanged))
 		{
 			buildOpenXRPalmRelativeJointPoseFromSkeletalPose(
 				side, baseline->transforms, state.relativeJoints);
@@ -108,7 +109,7 @@ namespace HOL::SteamVR
 			}
 		}
 
-		if (hmdPose == nullptr || openXRHmdPose == nullptr || !state.hasRelativeJoints)
+		if (hmdPose == nullptr || openXRHmdPose == nullptr)
 		{
 			state.hasStageFromSteamVR = false;
 			setInactive(state);
@@ -129,7 +130,8 @@ namespace HOL::SteamVR
 		}
 
 		const bool poseChanged = !state.hasSourcePose || state.poseGeneration != poseGeneration;
-		if (!sourceChanged && !activeChanged && !skeletonChanged && !poseChanged && !offsetChanged)
+		const bool sampleChanged = sourceChanged || activeChanged || poseChanged || offsetChanged;
+		if (!sampleChanged && !skeletalUpdate)
 		{
 			return &state.sample;
 		}
@@ -150,28 +152,48 @@ namespace HOL::SteamVR
 							+ state.stageFromSteamVR.orientation * steamVRPalmPose.position;
 		palmPose.orientation = state.stageFromSteamVR.orientation * steamVRPalmPose.orientation;
 
-		HOL::PoseLocation jointPoses[XR_HAND_JOINT_COUNT_EXT]{};
-		applySteamVRPoseToOpenXRJointPose(palmPose, state.relativeJoints, jointPoses);
-
-		state.sample = {};
+		if (sourceChanged || activeChanged)
+		{
+			state.sample = {};
+		}
 		state.sample.active = true;
 		state.sample.hasUpdateGeneration = true;
 		state.sample.dataSourceState.isActive = true;
 		state.sample.dataSourceState.dataSource = XR_HAND_TRACKING_DATA_SOURCE_UNOBSTRUCTED_EXT;
-		for (int i = 0; i < XR_HAND_JOINT_COUNT_EXT; i++)
+
+		if (skeletalUpdate && state.hasRelativeJoints)
 		{
-			auto& location = state.sample.joints[i];
-			location.locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT
+			HOL::PoseLocation jointPoses[XR_HAND_JOINT_COUNT_EXT]{};
+			applySteamVRPoseToOpenXRJointPose(palmPose, state.relativeJoints, jointPoses);
+			for (int i = 0; i < XR_HAND_JOINT_COUNT_EXT; i++)
+			{
+				auto& location = state.sample.joints[i];
+				location.locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT
 									 | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
 									 | XR_SPACE_LOCATION_POSITION_TRACKED_BIT
 									 | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
-			location.pose.position = {
-				jointPoses[i].position.x(), jointPoses[i].position.y(), jointPoses[i].position.z()};
-			location.pose.orientation = {jointPoses[i].orientation.x(),
+				location.pose.position = {jointPoses[i].position.x(),
+									  jointPoses[i].position.y(),
+									  jointPoses[i].position.z()};
+				location.pose.orientation = {jointPoses[i].orientation.x(),
 										 jointPoses[i].orientation.y(),
 										 jointPoses[i].orientation.z(),
 										 jointPoses[i].orientation.w()};
+			}
 		}
+
+		// Pose-only updates keep the cached finger joints but move the palm immediately.
+		auto& palmLocation = state.sample.joints[XR_HAND_JOINT_PALM_EXT];
+		palmLocation.locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT
+								   | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
+								   | XR_SPACE_LOCATION_POSITION_TRACKED_BIT
+								   | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+		palmLocation.pose.position
+			= {palmPose.position.x(), palmPose.position.y(), palmPose.position.z()};
+		palmLocation.pose.orientation = {palmPose.orientation.x(),
+									 palmPose.orientation.y(),
+									 palmPose.orientation.z(),
+									 palmPose.orientation.w()};
 
 		// Only palm velocity is consumed downstream; finger motion remains relative to the palm.
 		HOL::PoseVelocity palmVelocity
@@ -190,10 +212,13 @@ namespace HOL::SteamVR
 									palmVelocity.angularVelocity.y(),
 									palmVelocity.angularVelocity.z()};
 
-		state.sourcePose = *controllerPose;
-		state.hasSourcePose = true;
-		state.poseGeneration = poseGeneration;
-		state.sampleGeneration++;
+		if (sampleChanged)
+		{
+			state.sourcePose = *controllerPose;
+			state.hasSourcePose = true;
+			state.poseGeneration = poseGeneration;
+			state.sampleGeneration++;
+		}
 		state.sample.updateGeneration = state.sampleGeneration;
 		return &state.sample;
 	}

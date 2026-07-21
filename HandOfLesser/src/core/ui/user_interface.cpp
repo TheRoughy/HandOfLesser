@@ -2186,8 +2186,21 @@ void HOL::UserInterface::buildMain()
 	}
 	if (ImGui::IsItemHovered())
 	{
+		showWrappedTooltip("How often to retrieve hand tracking data and submit controller poses.");
+	}
+	if (ImGui::InputInt(
+			"Skeletal Update Interval (ms)", &Config.general.skeletalUpdateIntervalMS))
+	{
+		if (Config.general.skeletalUpdateIntervalMS < 1)
+		{
+			Config.general.skeletalUpdateIntervalMS = 1;
+		}
+	}
+	if (ImGui::IsItemHovered())
+	{
 		showWrappedTooltip(
-			"Update frequency. Data updates at 10-16ms. Too low or too high causes stutter.");
+			"How often to update finger tracking, gestures, skeletal input, body tracking, "
+			"body trackers, and OSC.");
 	}
 
 	if (rightAlignButton("Reset##General"))
@@ -2195,6 +2208,7 @@ void HOL::UserInterface::buildMain()
 		HOL::settings::GeneralSettings defaults;
 		Config.general.motionPredictionMS = defaults.motionPredictionMS;
 		Config.general.updateIntervalMS = defaults.updateIntervalMS;
+		Config.general.skeletalUpdateIntervalMS = defaults.skeletalUpdateIntervalMS;
 	}
 
 	//////////////////

@@ -112,7 +112,8 @@ namespace HOL
 		struct GeneralSettings
 		{
 			int motionPredictionMS = 15; // Ignored by VD, reasonable for Oculus
-			int updateIntervalMS = 5;
+			int updateIntervalMS = 1;
+			int skeletalUpdateIntervalMS = 5;
 			int minTrackedJointsForQuality
 				= 26; // Minimum tracked joints to consider tracking valid
 		};
