@@ -18,6 +18,21 @@ using namespace HOL::OpenXR;
 
 namespace
 {
+	constexpr float MaxSmoothingSampleGapSeconds = 0.25f;
+
+	bool getSampleDeltaSeconds(XrTime previousSampleTime,
+							   XrTime currentSampleTime,
+							   float& sampleDeltaSeconds)
+	{
+		if (previousSampleTime <= 0 || currentSampleTime <= previousSampleTime)
+		{
+			return false;
+		}
+
+		sampleDeltaSeconds = (float)(currentSampleTime - previousSampleTime) / 1000000000.0f;
+		return sampleDeltaSeconds < MaxSmoothingSampleGapSeconds;
+	}
+
 	float getSmoothingAlpha(float smoothingMS,
 							bool hasPreviousSample,
 							bool poseStateChanged,
@@ -36,15 +51,75 @@ namespace
 			return 1.0f;
 		}
 
-		float sampleDeltaSeconds
-			= (float)(currentSampleTime - previousSampleTime) / 1000000000.0f;
-		if (sampleDeltaSeconds >= 0.25f)
+		float sampleDeltaSeconds = 0.0f;
+		if (!getSampleDeltaSeconds(previousSampleTime, currentSampleTime, sampleDeltaSeconds))
 		{
 			// A long gap means the old filtered state is no longer representative.
 			return 1.0f;
 		}
 
 		return 1.0f - std::exp(-sampleDeltaSeconds / smoothingTimeSeconds);
+	}
+
+	Eigen::Vector3f reducePositionJitter(const Eigen::Vector3f& measuredPosition,
+										 const Eigen::Vector3f& filteredPosition,
+										 const Eigen::Vector3f& filteredVelocity,
+										 float jitterRadiusMM,
+										 float sampleDeltaSeconds)
+	{
+		const float jitterRadiusMeters = jitterRadiusMM / 1000.0f;
+		if (jitterRadiusMeters <= 0.0f)
+		{
+			return measuredPosition;
+		}
+
+		const Eigen::Vector3f predictedPosition
+			= filteredPosition + filteredVelocity * sampleDeltaSeconds;
+		const Eigen::Vector3f residual = measuredPosition - predictedPosition;
+		const float residualDistance = residual.norm();
+		if (residualDistance >= jitterRadiusMeters)
+		{
+			return measuredPosition;
+		}
+
+		// Reduce only small corrections around the velocity-predicted trajectory. Unlike a hard
+		// deadband, this remains continuous as movement crosses the configured radius.
+		return predictedPosition + residual * (residualDistance / jitterRadiusMeters);
+	}
+
+	Eigen::Quaternionf reduceRotationJitter(const Eigen::Quaternionf& measuredOrientation,
+											const Eigen::Quaternionf& filteredOrientation,
+											const Eigen::Vector3f& filteredAngularVelocity,
+											float jitterRadiusDegrees,
+											float sampleDeltaSeconds)
+	{
+		const float jitterRadiusRadians = HOL::degreesToRadians(jitterRadiusDegrees);
+		if (jitterRadiusRadians <= 0.0f)
+		{
+			return measuredOrientation;
+		}
+
+		Eigen::Quaternionf predictedOrientation = filteredOrientation;
+		const float angularSpeed = filteredAngularVelocity.norm();
+		if (angularSpeed > 0.0f)
+		{
+			const Eigen::Quaternionf predictedRotation(Eigen::AngleAxisf(
+				angularSpeed * sampleDeltaSeconds, filteredAngularVelocity / angularSpeed));
+			// OpenXR angular velocity is expressed in the reference space, so apply it before the
+			// current local-to-reference orientation.
+			predictedOrientation = predictedRotation * filteredOrientation;
+			predictedOrientation.normalize();
+		}
+
+		const float orientationDot
+			= std::clamp(std::abs(predictedOrientation.dot(measuredOrientation)), 0.0f, 1.0f);
+		const float residualAngle = 2.0f * std::acos(orientationDot);
+		if (residualAngle >= jitterRadiusRadians)
+		{
+			return measuredOrientation;
+		}
+
+		return predictedOrientation.slerp(residualAngle / jitterRadiusRadians, measuredOrientation);
 	}
 
 	void applyOculusThumbOrientationFix(XrHandJointLocationEXT jointLocations[], HandSide side)
@@ -495,6 +570,29 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 				*= HOL::Config.steamvr.poseSmoothing.linearVelocityMultiplier;
 			rawPalmVelocity.angularVelocity
 				*= HOL::Config.steamvr.poseSmoothing.angularVelocityMultiplier;
+
+			// Suppress small corrections around the velocity-predicted trajectory. Body fallback
+			// already provides a stabilized pose and should pass through unchanged.
+			const bool canReduceJitter = !usingBodyTrackingFallback && this->handPose.poseTracked
+										 && this->mHasFilteredPalmPose && !poseStateChanged;
+			float jitterSampleDeltaSeconds = 0.0f;
+			if (canReduceJitter
+				&& getSampleDeltaSeconds(
+					this->mPrevFilteredSampleTime, time, jitterSampleDeltaSeconds))
+			{
+				rawPalmPose.position
+					= reducePositionJitter(rawPalmPose.position,
+										   this->mFilteredPalmPose.position,
+										   this->mFilteredPalmVelocity.linearVelocity,
+										   HOL::Config.steamvr.positionJitterRadiusMM,
+										   jitterSampleDeltaSeconds);
+				rawPalmPose.orientation
+					= reduceRotationJitter(rawPalmPose.orientation,
+										   this->mFilteredPalmPose.orientation,
+										   this->mFilteredPalmVelocity.angularVelocity,
+										   HOL::Config.steamvr.rotationJitterRadiusDegrees,
+										   jitterSampleDeltaSeconds);
+			}
 
 			const float positionSmoothingAlpha
 				= getSmoothingAlpha(HOL::Config.steamvr.poseSmoothing.positionSmoothingMS

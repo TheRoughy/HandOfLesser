@@ -1425,9 +1425,6 @@ void HOL::UserInterface::buildSteamVR()
 
 	ImGui::SeparatorText("General");
 
-	ImGui::TextDisabled(
-		"Pose smoothing profile: %s", state::Runtime.isVDXR ? "VDXR" : "Standard");
-
 	syncSettings |= ImGui::InputFloat("Steam Pose offset (ms)",
 									  &Config.steamvr.poseSmoothing.steamPoseTimeOffsetMS,
 									  1.0f,
@@ -1448,6 +1445,34 @@ void HOL::UserInterface::buildSteamVR()
 									  1.0f,
 									  5.0f,
 									  "%.0f");
+	if (ImGui::InputFloat("Position jitter filter (mm)",
+						  &Config.steamvr.positionJitterRadiusMM,
+						  0.1f,
+						  0.5f,
+						  "%.1f"))
+	{
+		Config.steamvr.positionJitterRadiusMM
+			= std::max(0.0f, Config.steamvr.positionJitterRadiusMM);
+		syncSettings = true;
+	}
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip("Suppress small hand-position corrections.");
+	}
+	if (ImGui::InputFloat("Rotation jitter filter (deg)",
+						  &Config.steamvr.rotationJitterRadiusDegrees,
+						  0.1f,
+						  0.5f,
+						  "%.1f"))
+	{
+		Config.steamvr.rotationJitterRadiusDegrees
+			= std::max(0.0f, Config.steamvr.rotationJitterRadiusDegrees);
+		syncSettings = true;
+	}
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip("Suppress small hand-rotation corrections.");
+	}
 	syncSettings |= ImGui::Checkbox("Trigger stabilization", &Config.steamvr.triggerStabilization);
 	if (ImGui::IsItemHovered())
 	{
@@ -1496,8 +1521,9 @@ void HOL::UserInterface::buildSteamVR()
 	if (rightAlignButton("Reset##SteamVRGeneral"))
 	{
 		HOL::settings::SteamVRSettings steamVrDefaults;
-		Config.steamvr.poseSmoothing
-			= HOL::settings::defaultSteamVRPoseSmoothingSettings(state::Runtime.isVDXR);
+		Config.steamvr.poseSmoothing = steamVrDefaults.poseSmoothing;
+		Config.steamvr.positionJitterRadiusMM = steamVrDefaults.positionJitterRadiusMM;
+		Config.steamvr.rotationJitterRadiusDegrees = steamVrDefaults.rotationJitterRadiusDegrees;
 		Config.steamvr.triggerStabilization = steamVrDefaults.triggerStabilization;
 		Config.steamvr.triggerStabilizationSmoothingMS
 			= steamVrDefaults.triggerStabilizationSmoothingMS;

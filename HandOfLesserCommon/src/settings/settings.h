@@ -316,24 +316,10 @@ namespace HOL
 		{
 			float steamPoseTimeOffsetMS = 15.0f;
 			float positionSmoothingMS = 40.0f;
-			float rotationSmoothingMS = 0.0f;
+			float rotationSmoothingMS = 5.0f;
 			float linearVelocityMultiplier = 1.0f;
 			float angularVelocityMultiplier = 0.1f;
 		};
-
-		inline SteamVRPoseSmoothingSettings defaultSteamVRPoseSmoothingSettings(bool vdxr)
-		{
-			SteamVRPoseSmoothingSettings settings;
-			if (!vdxr)
-			{
-				// OpenXR should return pre-predicted poses. We don't know the display time 
-				// so this is not ideal and having SteamVR apply additional prediction causes stutter.
-				// VDXR incorrectly provides poses with no prediction, so we can let SteamVR handle it.
-				// After messing around I've ended up with the same default values for these,
-				// but we'll keep the settings separated, as they do behave differently.
-			}
-			return settings;
-		}
 
 		struct SteamVRSettings
 		{
@@ -344,11 +330,9 @@ namespace HOL
 			bool blockControllerInputWhileHandTracking = true;
 			bool disableOtherControllersWhileHandTracking = true;
 			bool showDevicePoseDiagnostics = false;
-			SteamVRPoseSmoothingSettings poseSmoothing = defaultSteamVRPoseSmoothingSettings(true);
-			SteamVRPoseSmoothingSettings standardPoseSmoothing
-				= defaultSteamVRPoseSmoothingSettings(false);
-			SteamVRPoseSmoothingSettings vdxrPoseSmoothing
-				= defaultSteamVRPoseSmoothingSettings(true);
+			SteamVRPoseSmoothingSettings poseSmoothing;
+			float positionJitterRadiusMM = 7.0f;
+			float rotationJitterRadiusDegrees = 10.0f;
 			bool triggerStabilization = true;
 			float triggerStabilizationSmoothingMS = 200.0f;
 			float triggerStabilizationFalloffMS = 500.0f;

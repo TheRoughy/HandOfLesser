@@ -298,8 +298,8 @@ namespace HOL
 				  settings.disableOtherControllersWhileHandTracking},
 				 {"showDevicePoseDiagnostics", settings.showDevicePoseDiagnostics},
 				 {"poseSmoothing", settings.poseSmoothing},
-				 {"standardPoseSmoothing", settings.standardPoseSmoothing},
-				 {"vdxrPoseSmoothing", settings.vdxrPoseSmoothing},
+				 {"positionJitterRadiusMM", settings.positionJitterRadiusMM},
+				 {"rotationJitterRadiusDegrees", settings.rotationJitterRadiusDegrees},
 				 {"triggerStabilization", settings.triggerStabilization},
 				 {"triggerStabilizationSmoothingMS", settings.triggerStabilizationSmoothingMS},
 				 {"triggerStabilizationFalloffMS", settings.triggerStabilizationFalloffMS},
@@ -325,8 +325,9 @@ namespace HOL
 				j, "showDevicePoseDiagnostics", settings.showDevicePoseDiagnostics);
 			nlohmann::get_to_if_present(j, "poseSmoothing", settings.poseSmoothing);
 			nlohmann::get_to_if_present(
-				j, "standardPoseSmoothing", settings.standardPoseSmoothing);
-			nlohmann::get_to_if_present(j, "vdxrPoseSmoothing", settings.vdxrPoseSmoothing);
+				j, "positionJitterRadiusMM", settings.positionJitterRadiusMM);
+			nlohmann::get_to_if_present(
+				j, "rotationJitterRadiusDegrees", settings.rotationJitterRadiusDegrees);
 
 			nlohmann::get_to_if_present(
 				j, "triggerStabilization", settings.triggerStabilization);

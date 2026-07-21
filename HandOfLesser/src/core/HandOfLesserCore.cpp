@@ -100,12 +100,6 @@ void HandOfLesserCore::init(int serverPort)
 				  << std::endl;
 	}
 
-	// We store different configs depending on whether we're dealing with VDXR or other runtimes.
-	// The reason is that VDXR does not provide pre-predicted poses.
-	// This is better for us, but technically wrong.
-	Config.steamvr.poseSmoothing = runtimeState.isVDXR ? Config.steamvr.vdxrPoseSmoothing
-													   : Config.steamvr.standardPoseSmoothing;
-
 	this->mInstanceHolder.init();
 	runtimeState.openxrState = this->mInstanceHolder.getState();
 
@@ -731,12 +725,6 @@ void HOL::HandOfLesserCore::syncState()
 
 void HOL::HandOfLesserCore::saveSettings()
 {
-	// See init()
-	auto& poseSmoothing
-		= state::Runtime.isVDXR ? Config.steamvr.vdxrPoseSmoothing
-								: Config.steamvr.standardPoseSmoothing;
-	poseSmoothing = Config.steamvr.poseSmoothing;
-
 	std::ofstream file(HOL::Paths::getSettingsFilePath());
 	nlohmann::json j = Config;
 	file << j.dump(4); // indented
