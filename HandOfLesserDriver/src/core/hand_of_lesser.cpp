@@ -310,6 +310,35 @@ namespace HOL
 
 	void HandOfLesser::disableAppDrivenState()
 	{
+		// A reconnecting app may start with no valid hand pose and therefore have no transition
+		// packet to send. Clear the previous app's tracking decisions here instead of carrying them
+		// into the next connection.
+		for (int side = 0; side < HOL::HandSide_MAX; ++side)
+		{
+			mLastHandTransforms[side] = {};
+			mHasHandTransform[side] = false;
+		}
+		mLastMultimodalPosePayload = {};
+		Tracking = {};
+
+		auto hookedControllers = mHookedControllers.load();
+		for (const auto& controller : *hookedControllers)
+		{
+			if (controller->mDeviceClass != vr::TrackedDeviceClass_Controller)
+			{
+				continue;
+			}
+
+			controller->mValidWhileOriginalInvalid = false;
+			controller->mHandTrackingTargetState = false;
+			controller->mHandTrackingState = false;
+			controller->mHandTrackingDebounceFrames = HookedController::HandTrackingDebounceTime;
+			if (!controller->isActingAsTracker())
+			{
+				controller->setSuppressed(false);
+			}
+		}
+
 		if (Config.handPose.controllerMode == ControllerMode::NoControllerMode
 			&& !Config.skeletal.augmentControllerSkeleton
 			&& !Config.bodyTrackers.enableBodyTrackers)
