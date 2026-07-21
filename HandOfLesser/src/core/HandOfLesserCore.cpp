@@ -8,6 +8,8 @@
 #include "src/core/ui/display_global.h"
 #include "src/util/hol_utils.h"
 #include "src/vrchat/vrchat_osc.h"
+#include "src/windows/high_resolution_timer.h"
+#include "src/windows/windows_utils.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -159,6 +161,7 @@ void HandOfLesserCore::init(int serverPort)
 
 bool HandOfLesserCore::start()
 {
+	HOL::HighResolutionTimer::configureProcessTiming();
 	this->mActive.store(true);
 	this->mShouldTerminate.store(false);
 	this->mShouldRestart.store(false);
@@ -459,9 +462,16 @@ void HOL::HandOfLesserCore::receiveDataThread()
 
 void HandOfLesserCore::mainLoop()
 {
+	if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL))
+	{
+		std::cerr << "Failed to set tracking thread priority: "
+				  << FormatWindowsError(GetLastError()) << std::endl;
+	}
+
+	HOL::HighResolutionTimer updateTimer;
+
 	while (1)
 	{
-		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 		this->mUserInterface.Current->getVisualizer()->clearDrawQueue();
 
 		if (this->shouldTerminate())
@@ -487,7 +497,8 @@ void HandOfLesserCore::mainLoop()
 
 		this->flushSettings();
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(Config.general.updateIntervalMS));
+		updateTimer.waitForInterval(
+			std::chrono::milliseconds(std::max(Config.general.updateIntervalMS, 1)));
 	}
 
 	std::cout << "Exiting loop" << std::endl;
