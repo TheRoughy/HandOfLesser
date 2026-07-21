@@ -6,6 +6,7 @@
 #include <HandOfLesserCommon.h>
 #include <chrono>
 #include "src/hands/hand_pose.h"
+#include "src/hands/pose_filter.h"
 #include "openxr_body.h"
 
 using namespace HOL;
@@ -40,15 +41,12 @@ private:
 	XrHandTrackingDataSourceStateEXT mDataSourceState{XR_TYPE_HAND_TRACKING_DATA_SOURCE_STATE_EXT};
 
 	HOL::PoseLocation mPrevRawPose{};
-	HOL::PoseLocation mFilteredPalmPose{};
-	HOL::PoseVelocity mFilteredPalmVelocity{};
+	HOL::PoseFilter mPalmPoseFilter{};
 	uint64_t mPrevExternalUpdateGeneration = 0;
 	bool mPrevActive = false;
 	bool mPrevPoseValid = false;
 	bool mPrevPoseTracked = false;
 	bool mHasPrevRawPose = false;
-	bool mHasFilteredPalmPose = false;
 	XrTime mDirectHandTrackingStartTime = 0;
-	XrTime mPrevFilteredSampleTime = 0;
 	std::chrono::steady_clock::time_point mLastPoseUpdateTime{};
 };

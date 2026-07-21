@@ -10,6 +10,7 @@
 	src/core/settings_global.cpp
 	src/core/state_global.cpp
 	src/openxr/openxr_hand.cpp
+	src/hands/pose_filter.cpp
 	src/core/ui/user_interface.cpp
 	src/core/ui/ui_gesture_debug.cpp
 	src/core/ui/ui_graphics.cpp
