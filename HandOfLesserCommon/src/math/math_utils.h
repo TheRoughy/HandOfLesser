@@ -15,6 +15,9 @@ namespace HOL
 	float degreesToRadians(float degrees);
 	float radiansToDegrees(float radians);
 	float angleBetweenVectors(const Eigen::Vector3f& first, const Eigen::Vector3f& second);
+	// Interpolate around the angle between two directions without shortening the result.
+	Eigen::Vector3f
+	slerpDirections(const Eigen::Vector3f& from, const Eigen::Vector3f& to, float alpha);
 	float getClosestSegmentDistance(const Eigen::Vector3f& p1,
 									const Eigen::Vector3f& q1,
 									const Eigen::Vector3f& p2,

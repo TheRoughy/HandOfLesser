@@ -6,6 +6,9 @@ namespace HOL::SteamVR
 {
 	vr::VRBoneTransform_t poseLocationToBoneTransform(const HOL::PoseLocation& location);
 	HOL::PoseLocation boneTransformToPoseLocation(const vr::VRBoneTransform_t& transform);
+	vr::HmdMatrix34_t poseLocationToMatrix34(const HOL::PoseLocation& location);
+	HOL::PoseLocation getRelativePose(const HOL::PoseLocation& reference,
+									  const HOL::PoseLocation& pose);
 	HOL::PoseLocation getSteamVRTrackingReferencePose(const vr::DriverPose_t& pose);
 	HOL::PoseLocation getSteamVRDevicePose(const vr::DriverPose_t& pose);
 	void setSteamVRDevicePose(vr::DriverPose_t& pose, const HOL::PoseLocation& devicePose);

@@ -260,11 +260,11 @@ namespace HOL::hooks
 						controller.get());
 				const bool forwardedTrackingReference
 					= controller->mDeviceClass == vr::TrackedDeviceClass_HMD;
-				if (HOL::HandOfLesser::Runtime.isSteamVR
-					&& (forwardedHandTrackingController || forwardedTrackingReference))
+				if ((HOL::HandOfLesser::Runtime.isSteamVR && forwardedHandTrackingController)
+					|| forwardedTrackingReference)
 				{
-					// Keep the HMD alongside the hand source so the app can align SteamVR's raw
-					// driver space to its OpenXR stage space. Pipe I/O remains deferred.
+					// The HMD is also the reference for hand-pointer poses under Oculus and VDXR,
+					// so retain its latest valid pose under every runtime.
 					if (controller->cacheForwardedPose(newPose, newPoseValid)
 						&& forwardedHandTrackingController)
 					{
@@ -348,7 +348,7 @@ namespace HOL::hooks
 	namespace CreateBooleanComponent
 	{
 		Hook<CreateBooleanComponent::Signature>
-			FunctionHook("IVRDriverInput003::CreateBooleanComponent");
+			FunctionHook("IVRDriverInput::CreateBooleanComponent");
 
 		static vr::EVRInputError Detour(vr::IVRDriverInput* _this,
 										vr::PropertyContainerHandle_t ulContainer,
@@ -385,7 +385,7 @@ namespace HOL::hooks
 	namespace CreateScalarComponent
 	{
 		Hook<CreateScalarComponent::Signature>
-			FunctionHook("IVRDriverInput003::CreateScalarComponent");
+			FunctionHook("IVRDriverInput::CreateScalarComponent");
 
 		static vr::EVRInputError Detour(vr::IVRDriverInput* _this,
 										vr::PropertyContainerHandle_t ulContainer,
@@ -427,7 +427,7 @@ namespace HOL::hooks
 	namespace CreateSkeletonComponent
 	{
 		Hook<CreateSkeletonComponent::Signature>
-			FunctionHook("IVRDriverInput003::CreateSkeletonComponent");
+			FunctionHook("IVRDriverInput::CreateSkeletonComponent");
 
 		static vr::EVRInputError Detour(vr::IVRDriverInput* _this,
 										vr::PropertyContainerHandle_t ulContainer,
@@ -472,7 +472,7 @@ namespace HOL::hooks
 	namespace UpdateBooleanComponent
 	{
 		Hook<UpdateBooleanComponent::Signature>
-			FunctionHook("IVRDriverInput003::UpdateBooleanComponent");
+			FunctionHook("IVRDriverInput::UpdateBooleanComponent");
 
 		static vr::EVRInputError Detour(vr::IVRDriverInput* _this,
 										vr::VRInputComponentHandle_t ulComponent,
@@ -545,7 +545,7 @@ namespace HOL::hooks
 	namespace UpdateScalarComponent
 	{
 		Hook<UpdateScalarComponent::Signature>
-			FunctionHook("IVRDriverInput003::UpdateScalarComponent");
+			FunctionHook("IVRDriverInput::UpdateScalarComponent");
 
 		static vr::EVRInputError Detour(vr::IVRDriverInput* _this,
 										vr::VRInputComponentHandle_t ulComponent,
@@ -609,7 +609,7 @@ namespace HOL::hooks
 	namespace UpdateSkeletonComponent
 	{
 		Hook<UpdateSkeletonComponent::Signature>
-			FunctionHook("IVRDriverInput003::UpdateSkeletonComponent");
+			FunctionHook("IVRDriverInput::UpdateSkeletonComponent");
 
 		static vr::EVRInputError Detour(vr::IVRDriverInput* _this,
 										vr::VRInputComponentHandle_t ulComponent,
@@ -704,7 +704,8 @@ namespace HOL::hooks
 			}
 
 			// There is also a IVRDriverInputInternal_XXX or something that needs to be avoided.
-			if (iface.find("IVRDriverInput_") != std::string::npos)
+			if (originalInterface != nullptr
+				&& iface.find("IVRDriverInput_") != std::string::npos)
 			{
 				DriverLog("Found Input interface: %s", iface.c_str());
 

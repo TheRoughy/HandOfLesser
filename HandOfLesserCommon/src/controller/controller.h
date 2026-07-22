@@ -14,6 +14,7 @@ namespace HOL
 	{
 		EmulatedControllerProfile_Index,
 		EmulatedControllerProfile_OculusTouch,
+		EmulatedControllerProfile_SteamLinkHand,
 		EmulatedControllerProfile_MAX
 	};
 
@@ -23,6 +24,8 @@ namespace HOL
 		EmulatedControllerVariant_IndexFull,
 		EmulatedControllerVariant_OculusTouchPartial,
 		EmulatedControllerVariant_OculusTouchFull,
+		EmulatedControllerVariant_SteamLinkHandPartial,
+		EmulatedControllerVariant_SteamLinkHandFull,
 		EmulatedControllerVariant_MAX
 	};
 
@@ -36,6 +39,11 @@ namespace HOL
 		{
 			return fullTracking ? EmulatedControllerVariant_OculusTouchFull
 								: EmulatedControllerVariant_OculusTouchPartial;
+		}
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			return fullTracking ? EmulatedControllerVariant_SteamLinkHandFull
+								: EmulatedControllerVariant_SteamLinkHandPartial;
 		}
 
 		return fullTracking ? EmulatedControllerVariant_IndexFull

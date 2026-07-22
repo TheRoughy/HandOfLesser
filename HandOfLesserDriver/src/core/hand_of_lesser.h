@@ -15,7 +15,6 @@
 
 namespace HOL
 {
-
 	class HandOfLesser
 	{
 	public:
@@ -110,6 +109,7 @@ namespace HOL
 			vr::EVRSkeletalTrackingLevel requestedTrackingLevel) const;
 		void steamVRHandTrackingThread();
 		void requestSteamVRHandTrackingResync();
+		void updateHandTipPose(HOL::HandSide side, const HOL::PoseLocation& palmPose);
 		void persistAutoLaunchSetting();
 		void disableAppDrivenState();
 		void ReceiveDataThread();

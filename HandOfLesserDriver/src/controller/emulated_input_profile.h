@@ -12,8 +12,20 @@ namespace HOL
 		return role == vr::TrackedControllerRole_LeftHand;
 	}
 
+	inline bool usesTouchControllerLayout(EmulatedControllerProfile profile)
+	{
+		return profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch
+			   || profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand;
+	}
+
 	inline const char* getEmulatedControllerModelName(EmulatedControllerProfile profile, bool left)
 	{
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			return left ? "HandOfLesser SteamLink Hand (Left)"
+						: "HandOfLesser SteamLink Hand (Right)";
+		}
+
 		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
 		{
 			return left ? "Meta Quest 3 (Left Controller)"
@@ -26,6 +38,11 @@ namespace HOL
 	inline const char* getEmulatedControllerRenderModelName(EmulatedControllerProfile profile,
 															 bool left)
 	{
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			return "{vrlink}shuttlecock";
+		}
+
 		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
 		{
 			return left ? "oculus_quest_plus_controller_left"
@@ -40,15 +57,27 @@ namespace HOL
 												   vr::EVRSkeletalTrackingLevel trackingLevel,
 												   const std::string& baseSerial)
 	{
-		return baseSerial
-			   + (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch
-					  ? "_touch"
-					  : "_index")
+		const char* profileSuffix = "_index";
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
+		{
+			profileSuffix = "_touch";
+		}
+		else if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			profileSuffix = "_steamlink";
+		}
+
+		return baseSerial + profileSuffix
 			   + (trackingLevel == vr::VRSkeletalTracking_Full ? "_full" : "_partial");
 	}
 
 	inline const char* getEmulatedControllerResourceRoot(EmulatedControllerProfile profile)
 	{
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			return "vrlink";
+		}
+
 		return (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
 				   ? "oculus"
 				   : "indexcontroller";
@@ -57,6 +86,12 @@ namespace HOL
 	inline const char* getEmulatedControllerRegisteredType(EmulatedControllerProfile profile,
 														   bool left)
 	{
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			return left ? "handoflesser/steamlink_hand_left"
+						: "handoflesser/steamlink_hand_right";
+		}
+
 		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
 		{
 			return left ? "oculus/WMHD315M3010GV_Controller_Left"
@@ -69,7 +104,12 @@ namespace HOL
 
 	inline const char* getEmulatedControllerInputProfilePath(EmulatedControllerProfile profile)
 	{
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			return "{00handoflesser}/input/steamlink_hand_profile.json";
+		}
+
+		if (usesTouchControllerLayout(profile))
 		{
 			return "{00handoflesser}/input/touch_profile.json";
 		}
@@ -79,7 +119,12 @@ namespace HOL
 
 	inline const char* getEmulatedControllerTypeString(EmulatedControllerProfile profile)
 	{
-		return (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			return "svl_hand_interaction_augmented";
+		}
+
+		return usesTouchControllerLayout(profile)
 				   ? "oculus_touch"
 				   : "knuckles";
 	}
@@ -88,7 +133,7 @@ namespace HOL
 													 bool left,
 													 const char* state)
 	{
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
+		if (usesTouchControllerLayout(profile))
 		{
 			std::string extension = ".png";
 			if (strcmp(state, "searching") == 0 || strcmp(state, "searching_alert") == 0)
@@ -117,7 +162,7 @@ namespace HOL
 													EmulatedControllerProfile profile,
 													bool left)
 	{
-		if (profile != EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
+		if (!usesTouchControllerLayout(profile))
 		{
 			return;
 		}

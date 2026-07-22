@@ -148,6 +148,7 @@ namespace HOL
 		void UpdateBoolInput(const std::string& input, bool value) override;
 		void UpdateFloatInput(const std::string& input, float value) override;
 		void UpdateSkeletal(HOL::SkeletalPayload* payload) override;
+		void UpdateTipPose(const vr::HmdMatrix34_t& transform);
 		void SubmitPose() override;
 		bool isConnected() const;
 
@@ -178,7 +179,8 @@ namespace HOL
 		std::string my_controller_model_number_;
 		std::string my_controller_serial_number_;
 
-		std::array<vr::VRInputComponentHandle_t, InputHandleType::MAX> mInputHandles;
+		std::array<vr::VRInputComponentHandle_t, InputHandleType::MAX> mInputHandles{};
+		vr::VRInputComponentHandle_t mTipPoseHandle = vr::k_ulInvalidInputComponentHandle;
 
 		std::atomic<bool> is_active_ = false;
 		std::atomic<bool> mDeviceConnected = false;

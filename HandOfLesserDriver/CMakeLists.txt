@@ -15,6 +15,7 @@ add_library(${DRIVER_NAME} SHARED
     src/controller/hooked_controller.cpp
     src/core/hand_of_lesser.cpp
     src/controller/controller_common.cpp
+    src/steamvr/hand_tip_pose.cpp
     src/tracker/emulated_tracker_driver.cpp
     src/hooking/Hooking.cpp
     src/hooking/hooks.cpp

@@ -7,7 +7,7 @@ namespace HOL::SteamVR
 	namespace
 	{
 		HOL::PoseLocation composePose(const HOL::PoseLocation& parent,
-									  const HOL::PoseLocation& child)
+								  const HOL::PoseLocation& child)
 		{
 			HOL::PoseLocation result;
 			result.position = parent.position + parent.orientation * child.position;
@@ -85,6 +85,31 @@ namespace HOL::SteamVR
 										 transform.orientation.y,
 										 transform.orientation.z);
 		return pose;
+	}
+
+	vr::HmdMatrix34_t poseLocationToMatrix34(const HOL::PoseLocation& location)
+	{
+		vr::HmdMatrix34_t transform{};
+		const Eigen::Matrix3f rotation = location.orientation.normalized().toRotationMatrix();
+		for (int row = 0; row < 3; row++)
+		{
+			for (int column = 0; column < 3; column++)
+			{
+				transform.m[row][column] = rotation(row, column);
+			}
+			transform.m[row][3] = location.position[row];
+		}
+		return transform;
+	}
+
+	HOL::PoseLocation getRelativePose(const HOL::PoseLocation& reference,
+									  const HOL::PoseLocation& pose)
+	{
+		const Eigen::Quaternionf inverseReference = reference.orientation.inverse();
+		HOL::PoseLocation relative;
+		relative.position = inverseReference * (pose.position - reference.position);
+		relative.orientation = inverseReference * pose.orientation;
+		return relative;
 	}
 
 	HOL::PoseLocation getSteamVRTrackingReferencePose(const vr::DriverPose_t& pose)

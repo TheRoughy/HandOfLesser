@@ -2475,6 +2475,15 @@ void HOL::UserInterface::buildMain()
 		{
 			HOL::HandOfLesserCore::Current->syncSettings();
 		}
+
+		if (ImGui::RadioButton(
+				"SteamLink Hand",
+				(int*)&HOL::Config.handPose.emulatedControllerProfile,
+				HOL::EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand))
+		{
+			HOL::HandOfLesserCore::Current->syncSettings();
+		}
+
 	}
 
 	/////////////////

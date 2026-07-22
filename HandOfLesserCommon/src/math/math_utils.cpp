@@ -54,6 +54,17 @@ namespace HOL
 	{
 		return std::atan2(first.cross(second).norm(), first.dot(second));
 	}
+
+	Eigen::Vector3f
+	slerpDirections(const Eigen::Vector3f& from, const Eigen::Vector3f& to, float alpha)
+	{
+		const Eigen::Vector3f normalizedFrom = from.normalized();
+		const Eigen::Vector3f normalizedTo = to.normalized();
+		const Eigen::Quaternionf fullRotation
+			= Eigen::Quaternionf::FromTwoVectors(normalizedFrom, normalizedTo);
+		return Eigen::Quaternionf::Identity().slerp(alpha, fullRotation) * normalizedFrom;
+	}
+
 	float getClosestSegmentDistance(const Eigen::Vector3f& p1,
 								   const Eigen::Vector3f& q1,
 								   const Eigen::Vector3f& p2,

@@ -109,7 +109,7 @@ namespace HOL
 
 		auto input = vr::VRDriverInput();
 
-		if (my_emulated_profile_ == HOL::EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
+		if (usesTouchControllerLayout(my_emulated_profile_))
 		{
 			// Oculus layout: left has X/Y, right has A/B.
 			if (isLeftHand)
@@ -137,7 +137,7 @@ namespace HOL
 		}
 
 		// Stick input (profile-specific naming).
-		if (my_emulated_profile_ == HOL::EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
+		if (usesTouchControllerLayout(my_emulated_profile_))
 		{
 			createScalarComponent(container, input, InputHandleType::joystick_x);
 			createScalarComponent(container, input, InputHandleType::joystick_y);
@@ -212,6 +212,21 @@ namespace HOL
 			0,		 // How many bones there are in the gripLimitTransforms above.
 			&mInputHandles[InputHandleType::skeleton] // Bind the component to a handle.
 		);
+
+		if (my_emulated_profile_
+			== EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			const auto poseError
+				= input->CreatePoseComponent(container, "/pose/tip", &mTipPoseHandle);
+			if (poseError != vr::VRInputError_None)
+			{
+				DriverLog("Failed to create /pose/tip component: %d", poseError);
+			}
+			else
+			{
+				DriverLog("Created emulated /pose/tip component");
+			}
+		}
 
 		// initialise our hand tracking simulation class
 		my_hand_simulation_ = std::make_unique<MyHandSimulation>();
@@ -382,9 +397,22 @@ namespace HOL
 		SteamVR::buildSkeletalPoseFromPayload(*payload, mSkeletalPose);
 
 		vr::VRDriverInput()->UpdateSkeletonComponent(mInputHandles[InputHandleType::skeleton],
-													 vr::VRSkeletalMotionRange_WithoutController,
-													 mSkeletalPose,
-													 eBone_Count);
+												 vr::VRSkeletalMotionRange_WithoutController,
+												 mSkeletalPose,
+												 eBone_Count);
+	}
+
+	void EmulatedControllerDriver::UpdateTipPose(const vr::HmdMatrix34_t& transform)
+	{
+		if (my_emulated_profile_
+				!= EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand
+			|| !is_active_ || !mDeviceConnected
+			|| mTipPoseHandle == vr::k_ulInvalidInputComponentHandle)
+		{
+			return;
+		}
+
+		vr::VRDriverInput()->UpdatePoseComponent(mTipPoseHandle, &transform, 0.0);
 	}
 
 	void EmulatedControllerDriver::SubmitPose()

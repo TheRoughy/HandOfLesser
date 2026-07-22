@@ -1,0 +1,12 @@
+{
+  "to_controller_type": "svl_hand_interaction_augmented",
+  "layouts": [
+    {
+      "priority": 100,
+      "from_controller_type": "oculus_touch",
+      "simulate_controller_type": true,
+      "simulate_render_model": false,
+      "simulate_HMD": true
+    }
+  ]
+}

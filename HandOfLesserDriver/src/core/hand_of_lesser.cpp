@@ -4,6 +4,7 @@
 #include "src/controller/emulated_controller_driver.h"
 #include "src/controller/generic_control_interface.h"
 #include "src/hooking/hooks.h"
+#include "src/steamvr/hand_tip_pose.h"
 #include "src/steamvr/input_wrapper.h"
 #include "src/utils/math_utils.h"
 #include <nlohmann/json.hpp>
@@ -135,6 +136,10 @@ namespace HOL
 					if (controller != nullptr)
 					{
 						controller->UpdatePose(&payload);
+						if (payload.valid)
+						{
+							updateHandTipPose(payload.side, payload.location);
+						}
 						controller->SubmitPose();
 					}
 
@@ -1731,6 +1736,33 @@ namespace HOL
 		mSteamVRHandTrackingResync.store(true);
 		mSteamVRHandTrackingPending.store(true);
 		mSteamVRHandTrackingCondition.notify_one();
+	}
+
+	void HandOfLesser::updateHandTipPose(HOL::HandSide side,
+									 const HOL::PoseLocation& palmPose)
+	{
+		if (Config.handPose.controllerMode != ControllerMode::EmulateControllerMode
+			|| Config.handPose.emulatedControllerProfile
+				   != EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		{
+			return;
+		}
+
+		auto* controller = getEmulatedController(side);
+		const auto hmd = getHMD();
+		const auto hmdPose = hmd ? hmd->getForwardedPose() : std::nullopt;
+		if (controller == nullptr || !hmdPose)
+		{
+			return;
+		}
+
+		const auto tipPose
+			= SteamVR::HandTipPoseGenerator::generate(
+				side, palmPose, controller->GetPose(), *hmdPose);
+		if (tipPose)
+		{
+			controller->UpdateTipPose(*tipPose);
+		}
 	}
 
 	// Hooks only publish snapshots and wake this thread. Conversion and pipe I/O must not run on
