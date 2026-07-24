@@ -118,4 +118,56 @@ namespace HOL::settings
 
 		return bindings;
 	}
+
+	std::vector<GestureBinding> defaultSteamLinkHandGestureBindings()
+	{
+		// The native profile exposes a fixed set of hand-specific inputs. Keep these bindings
+		// separate from the user-editable controller bindings used by the other profiles.
+		std::vector<GestureBinding> bindings;
+		const InputTarget pinchTargets[] = {
+			InputTarget::SteamLinkIndexPinch,
+			InputTarget::SteamLinkMiddlePinch,
+			InputTarget::SteamLinkRingPinch,
+			InputTarget::SteamLinkPinkyPinch,
+		};
+
+		for (int side = 0; side < HandSide::HandSide_MAX; side++)
+		{
+			for (int finger = FingerIndex; finger <= FingerLittle; finger++)
+			{
+				GestureBinding binding;
+				binding.side = static_cast<HandSide>(side);
+				binding.kind = GestureKind::Proximity;
+				binding.proximityFinger = static_cast<FingerType>(finger);
+				binding.target = pinchTargets[finger - FingerIndex];
+				bindings.push_back(binding);
+			}
+
+			GestureBinding grip;
+			grip.side = static_cast<HandSide>(side);
+			grip.kind = GestureKind::Grip;
+			grip.target = InputTarget::Grip;
+			bindings.push_back(grip);
+
+			GestureBinding point;
+			point.side = static_cast<HandSide>(side);
+			point.kind = GestureKind::IndexPoint;
+			point.target = InputTarget::SteamLinkIndexPoint;
+			bindings.push_back(point);
+		}
+
+		// Steam Link exposes the system input on the left hand only.
+		GestureBinding system;
+		system.side = LeftHand;
+		system.kind = GestureKind::Proximity;
+		system.proximityFinger = FingerIndex;
+		system.modifiers = static_cast<uint32_t>(GestureModifier::Hold)
+						   | static_cast<uint32_t>(GestureModifier::LookingAtHand)
+						   | static_cast<uint32_t>(GestureModifier::InFrontOfUser);
+		system.target = InputTarget::System;
+		system.pressAndRelease = true;
+		bindings.push_back(system);
+
+		return bindings;
+	}
 } // namespace HOL::settings

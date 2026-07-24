@@ -44,6 +44,13 @@ namespace HOL
 
 		system_click,
 
+		index_pinch_value,
+		middle_pinch_value,
+		ring_pinch_value,
+		pinky_pinch_value,
+		index_point_touch,
+		index_point_value,
+
 		finger_index,
 		finger_middle,
 		finger_ring,
@@ -87,6 +94,12 @@ namespace HOL
 		arr[grip_force] = Grip.force();
 		arr[grip_touch] = Grip.touch();
 		arr[system_click] = System.click();
+		arr[index_pinch_value] = IndexPinch.value();
+		arr[middle_pinch_value] = MiddlePinch.value();
+		arr[ring_pinch_value] = RingPinch.value();
+		arr[pinky_pinch_value] = PinkyPinch.value();
+		arr[index_point_touch] = IndexPoint.touch();
+		arr[index_point_value] = IndexPoint.value();
 		arr[finger_index] = Finger.index();
 		arr[finger_middle] = Finger.middle();
 		arr[finger_ring] = Finger.ring();

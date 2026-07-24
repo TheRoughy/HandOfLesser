@@ -60,8 +60,13 @@ namespace HOL::SteamVR
 		InputWrapper const Thumbrest = InputWrapper("thumbrest");
 		InputWrapper const System = InputWrapper("system");
 		InputWrapper const Menu = InputWrapper("menu");
+		InputWrapper const IndexPinch = InputWrapper("index_pinch");
+		InputWrapper const MiddlePinch = InputWrapper("middle_pinch");
+		InputWrapper const RingPinch = InputWrapper("ring_pinch");
+		InputWrapper const PinkyPinch = InputWrapper("pinky_pinch");
+		InputWrapper const IndexPoint = InputWrapper("index_point");
 
-		// index 
+		// index
 		InputWrapper const Finger = InputWrapper("finger");
 
 		// Skeleton

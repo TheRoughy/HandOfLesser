@@ -24,12 +24,13 @@ namespace HOL::OpenXR
 		void init();
 		// OpenXR tracker handles are initialized only for the direct OpenXR provider.
 		void initOpenXR(xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session);
-		void updateHands(XrSpace space,
-					 XrTime time,
-					 OpenXRBody& bodyTracker,
-					 bool skeletalUpdate,
-					 const std::array<const HOL::HandTrackingSample*, HOL::HandSide_MAX>&
-						 externalSamples = {});
+		void updateHands(
+			XrSpace space,
+			XrTime time,
+			OpenXRBody& bodyTracker,
+			bool skeletalUpdate,
+			const std::array<const HOL::HandTrackingSample*, HOL::HandSide_MAX>& externalSamples
+			= {});
 		void updateInputs();
 		HOL::HandTransformPayload getTransformPayload(HOL::HandSide side);
 		HOL::HandPose& getHandPose(HOL::HandSide side);
@@ -51,27 +52,33 @@ namespace HOL::OpenXR
 				= static_cast<size_t>(HOL::settings::InputTarget::InputTarget_MAX);
 
 			std::vector<std::shared_ptr<BaseAction>> actions;
+			std::vector<HOL::settings::GestureBinding> bindings;
 			std::vector<std::shared_ptr<BaseAction>> actionsByBindingIndex;
 			std::array<std::vector<size_t>, InputTargetCount> bindingIndicesByTarget;
 
-			const std::vector<size_t>& getBindingIndicesForTarget(
-				HOL::settings::InputTarget target) const
+			const std::vector<size_t>&
+			getBindingIndicesForTarget(HOL::settings::InputTarget target) const
 			{
 				return this->bindingIndicesByTarget[static_cast<size_t>(target)];
 			}
 		};
 
 		void initOpenXRHands(xr::UniqueDynamicSession& session);
+		std::shared_ptr<const ActionSet>
+		buildActionSet(const std::vector<HOL::settings::GestureBinding>& bindings) const;
 		void submitLegacyFingerCurl();
 		void updateSimpleGestures();
 		void updateTriggerStabilizationState(const ActionSet& actionSet);
-		float getTriggerStabilizationSmoothingMS(
-			HOL::HandSide side, std::chrono::steady_clock::time_point now) const;
+		float getTriggerStabilizationSmoothingMS(HOL::HandSide side,
+												 std::chrono::steady_clock::time_point now) const;
 		OpenXRHand mLeftHand;
 		OpenXRHand mRightHand;
 		HOL::SteamVR::SteamVRTrackingSource mSteamVRTrackingSource;
 
-		std::atomic<std::shared_ptr<const ActionSet>> mActionSet = std::make_shared<ActionSet>();
+		std::atomic<std::shared_ptr<const ActionSet>> mConfiguredActionSet
+			= std::make_shared<ActionSet>();
+		std::atomic<std::shared_ptr<const ActionSet>> mSteamLinkNativeActionSet
+			= std::make_shared<ActionSet>();
 		std::array<bool, HOL::HandSide_MAX> mTriggerStabilizationHeld = {false, false};
 		std::array<std::chrono::steady_clock::time_point, HOL::HandSide_MAX>
 			mLastTriggerStabilizationTime = {};

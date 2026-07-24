@@ -15,12 +15,24 @@ namespace HOL
 	inline bool usesTouchControllerLayout(EmulatedControllerProfile profile)
 	{
 		return profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch
-			   || profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand;
+			   || profile
+					  == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch;
+	}
+
+	inline bool usesSteamLinkHandModel(EmulatedControllerProfile profile)
+	{
+		return isSteamLinkHandProfile(profile);
 	}
 
 	inline const char* getEmulatedControllerModelName(EmulatedControllerProfile profile, bool left)
 	{
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
+		{
+			return left ? "HandOfLesser SteamLink Hand Native (Left)"
+						: "HandOfLesser SteamLink Hand Native (Right)";
+		}
+
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch)
 		{
 			return left ? "HandOfLesser SteamLink Hand (Left)"
 						: "HandOfLesser SteamLink Hand (Right)";
@@ -28,17 +40,16 @@ namespace HOL
 
 		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
 		{
-			return left ? "Meta Quest 3 (Left Controller)"
-						: "Meta Quest 3 (Right Controller)";
+			return left ? "Meta Quest 3 (Left Controller)" : "Meta Quest 3 (Right Controller)";
 		}
 
 		return left ? "Knuckles Left" : "Knuckles Right";
 	}
 
 	inline const char* getEmulatedControllerRenderModelName(EmulatedControllerProfile profile,
-															 bool left)
+															bool left)
 	{
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		if (usesSteamLinkHandModel(profile))
 		{
 			return "{vrlink}shuttlecock";
 		}
@@ -62,9 +73,14 @@ namespace HOL
 		{
 			profileSuffix = "_touch";
 		}
-		else if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		else if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch)
 		{
 			profileSuffix = "_steamlink";
+		}
+		else if (profile
+				 == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
+		{
+			profileSuffix = "_steamlink_native";
 		}
 
 		return baseSerial + profileSuffix
@@ -73,7 +89,7 @@ namespace HOL
 
 	inline const char* getEmulatedControllerResourceRoot(EmulatedControllerProfile profile)
 	{
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		if (usesSteamLinkHandModel(profile))
 		{
 			return "vrlink";
 		}
@@ -86,10 +102,15 @@ namespace HOL
 	inline const char* getEmulatedControllerRegisteredType(EmulatedControllerProfile profile,
 														   bool left)
 	{
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
 		{
-			return left ? "handoflesser/steamlink_hand_left"
-						: "handoflesser/steamlink_hand_right";
+			return left ? "handoflesser/steamlink_hand_native_left"
+						: "handoflesser/steamlink_hand_native_right";
+		}
+
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch)
+		{
+			return left ? "handoflesser/steamlink_hand_left" : "handoflesser/steamlink_hand_right";
 		}
 
 		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch)
@@ -98,15 +119,14 @@ namespace HOL
 						: "oculus/WMHD315M3010GV_Controller_Right";
 		}
 
-		return left ? "valve/index_controllerLHR-E217CD00"
-					: "valve/index_controllerLHR-E217CD01";
+		return left ? "valve/index_controllerLHR-E217CD00" : "valve/index_controllerLHR-E217CD01";
 	}
 
 	inline const char* getEmulatedControllerInputProfilePath(EmulatedControllerProfile profile)
 	{
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
 		{
-			return "{00handoflesser}/input/steamlink_hand_profile.json";
+			return "{vrlink}/input/svl_hand_interaction_augmented_input_profile.json";
 		}
 
 		if (usesTouchControllerLayout(profile))
@@ -119,19 +139,16 @@ namespace HOL
 
 	inline const char* getEmulatedControllerTypeString(EmulatedControllerProfile profile)
 	{
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
 		{
 			return "svl_hand_interaction_augmented";
 		}
 
-		return usesTouchControllerLayout(profile)
-				   ? "oculus_touch"
-				   : "knuckles";
+		return usesTouchControllerLayout(profile) ? "oculus_touch" : "knuckles";
 	}
 
-	inline std::string getEmulatedControllerIconPath(EmulatedControllerProfile profile,
-													 bool left,
-													 const char* state)
+	inline std::string
+	getEmulatedControllerIconPath(EmulatedControllerProfile profile, bool left, const char* state)
 	{
 		if (usesTouchControllerLayout(profile))
 		{
@@ -141,11 +158,8 @@ namespace HOL
 				extension = ".gif";
 			}
 
-			return std::string("{oculus}/icons/rifts_")
-				   + (left ? "left" : "right")
-				   + "_controller_"
-				   + state
-				   + extension;
+			return std::string("{oculus}/icons/rifts_") + (left ? "left" : "right") + "_controller_"
+				   + state + extension;
 		}
 
 		std::string extension = ".png";
@@ -167,46 +181,38 @@ namespace HOL
 			return;
 		}
 
-		props->SetStringProperty(
-			container,
-			vr::Prop_NamedIconPathDeviceOff_String,
-			getEmulatedControllerIconPath(profile, left, "off").c_str());
-		props->SetStringProperty( 
-			container,
-			vr::Prop_NamedIconPathDeviceSearching_String,
-			getEmulatedControllerIconPath(profile, left, "searching").c_str());
+		props->SetStringProperty(container,
+								 vr::Prop_NamedIconPathDeviceOff_String,
+								 getEmulatedControllerIconPath(profile, left, "off").c_str());
+		props->SetStringProperty(container,
+								 vr::Prop_NamedIconPathDeviceSearching_String,
+								 getEmulatedControllerIconPath(profile, left, "searching").c_str());
 		props->SetStringProperty(
 			container,
 			vr::Prop_NamedIconPathDeviceSearchingAlert_String,
 			getEmulatedControllerIconPath(profile, left, "searching_alert").c_str());
-		props->SetStringProperty(
-			container,
-			vr::Prop_NamedIconPathDeviceReady_String,
-			getEmulatedControllerIconPath(profile, left, "ready").c_str());
+		props->SetStringProperty(container,
+								 vr::Prop_NamedIconPathDeviceReady_String,
+								 getEmulatedControllerIconPath(profile, left, "ready").c_str());
 		props->SetStringProperty(
 			container,
 			vr::Prop_NamedIconPathDeviceReadyAlert_String,
 			getEmulatedControllerIconPath(profile, left, "ready_alert").c_str());
-		props->SetStringProperty(
-			container,
-			vr::Prop_NamedIconPathDeviceNotReady_String,
-			getEmulatedControllerIconPath(profile, left, "error").c_str());
-		props->SetStringProperty(
-			container,
-			vr::Prop_NamedIconPathDeviceStandby_String,
-			getEmulatedControllerIconPath(profile, left, "standby").c_str());
-		props->SetStringProperty(
-			container,
-			vr::Prop_NamedIconPathDeviceAlertLow_String,
-			getEmulatedControllerIconPath(profile, left, "ready_low").c_str());
-		props->SetStringProperty(
-			container,
-			vr::Prop_NamedIconPathControllerLeftDeviceOff_String,
-			getEmulatedControllerIconPath(profile, true, "off").c_str());
-		props->SetStringProperty(
-			container,
-			vr::Prop_NamedIconPathControllerRightDeviceOff_String,
-			getEmulatedControllerIconPath(profile, false, "off").c_str());
+		props->SetStringProperty(container,
+								 vr::Prop_NamedIconPathDeviceNotReady_String,
+								 getEmulatedControllerIconPath(profile, left, "error").c_str());
+		props->SetStringProperty(container,
+								 vr::Prop_NamedIconPathDeviceStandby_String,
+								 getEmulatedControllerIconPath(profile, left, "standby").c_str());
+		props->SetStringProperty(container,
+								 vr::Prop_NamedIconPathDeviceAlertLow_String,
+								 getEmulatedControllerIconPath(profile, left, "ready_low").c_str());
+		props->SetStringProperty(container,
+								 vr::Prop_NamedIconPathControllerLeftDeviceOff_String,
+								 getEmulatedControllerIconPath(profile, true, "off").c_str());
+		props->SetStringProperty(container,
+								 vr::Prop_NamedIconPathControllerRightDeviceOff_String,
+								 getEmulatedControllerIconPath(profile, false, "off").c_str());
 	}
 
 	// Maps index inputs to touch controller and vice-versa,
@@ -215,6 +221,11 @@ namespace HOL
 											HandSide side,
 											const std::string& inputPath)
 	{
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
+		{
+			return inputPath;
+		}
+
 		auto inputType = INPUT_TYPES.find(inputPath);
 		if (inputType == INPUT_TYPES.end())
 		{

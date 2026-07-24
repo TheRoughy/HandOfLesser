@@ -59,10 +59,9 @@ namespace
 				continue;
 			}
 
-			int overlapWidth
-				= std::max(0,
-						   std::min(windowX + windowWidth, monitorX + videoMode->width)
-							   - std::max(windowX, monitorX));
+			int overlapWidth = std::max(0,
+										std::min(windowX + windowWidth, monitorX + videoMode->width)
+											- std::max(windowX, monitorX));
 			int overlapHeight
 				= std::max(0,
 						   std::min(windowY + windowHeight, monitorY + videoMode->height)
@@ -87,7 +86,7 @@ namespace
 		ImGui::SameLine();
 		ImGui::TextLinkOpenURL(url);
 	}
-}
+} // namespace
 
 HOL::UserInterface::UserInterface()
 {
@@ -367,8 +366,7 @@ void UserInterface::buildSingleHandTransformDisplay(HOL::HandSide side)
 
 	ImGui::Text("Data source: %s", dataSource);
 	ImGui::Text("Tracked joints: %d / 26", HOL::display::HandTransform[side].trackedJointCount);
-	ImGui::Text(
-		"Update rate: %5.2f ms", HOL::display::HandTransform[side].updateRateMS.load());
+	ImGui::Text("Update rate: %5.2f ms", HOL::display::HandTransform[side].updateRateMS.load());
 
 	ImGui::SeparatorText("Position");
 
@@ -390,9 +388,9 @@ void UserInterface::buildSingleHandTransformDisplay(HOL::HandSide side)
 	ImGui::SeparatorText("Orientation");
 
 	{
-		Eigen::Vector3f asEuler
-			= HOL::display::HandTransform[side].rawPose.orientation.toRotationMatrix()
-				  .canonicalEulerAngles(0, 1, 2);
+		Eigen::Vector3f asEuler = HOL::display::HandTransform[side]
+									  .rawPose.orientation.toRotationMatrix()
+									  .canonicalEulerAngles(0, 1, 2);
 		ImGui::Text("Raw   : %.3f, %.3f, %.3f",
 					HOL::radiansToDegrees(asEuler.x()),
 					HOL::radiansToDegrees(asEuler.y()),
@@ -587,9 +585,8 @@ void HOL::UserInterface::buildBindings()
 		openEditBindingPopup = true;
 	};
 
-	ImGui::BeginChild("BindingsWindow",
-					   ImVec2(scaleSize(PanelWidth), 0),	
-					   ImGuiChildFlags_AutoResizeY);
+	ImGui::BeginChild(
+		"BindingsWindow", ImVec2(scaleSize(PanelWidth), 0), ImGuiChildFlags_AutoResizeY);
 
 	ImGui::SeparatorText("Gesture Bindings");
 	ImGui::TextWrapped("Configure which hand gesture maps to which controller input.");
@@ -637,10 +634,7 @@ void HOL::UserInterface::buildBindings()
 					   headReferenceAvailable,
 					   "Head reference requires body tracking.");
 	ImGui::SameLine();
-	drawReferenceRadio("Hand",
-					   HOL::settings::JoystickReferenceMode::Hand,
-					   true,
-					   "");
+	drawReferenceRadio("Hand", HOL::settings::JoystickReferenceMode::Hand, true, "");
 
 	ImGui::SeparatorText("Gesture Conditions");
 	int chainGestureTimeoutMS = Config.input.chainGestureTimeoutMS;
@@ -708,8 +702,7 @@ void HOL::UserInterface::buildBindings()
 	}
 	if (ImGui::IsItemHovered())
 	{
-		showWrappedTooltip(
-			"Cone infront of the user, from the torso.");
+		showWrappedTooltip("Cone infront of the user, from the torso.");
 	}
 
 	float palmFacingFovDegrees = Config.input.palmFacingFovDegrees;
@@ -720,8 +713,7 @@ void HOL::UserInterface::buildBindings()
 	}
 	if (ImGui::IsItemHovered())
 	{
-		showWrappedTooltip(
-			"Cone from the hand that head must be inside.");
+		showWrappedTooltip("Cone from the hand that head must be inside.");
 	}
 
 	ImGui::SameLine();
@@ -738,7 +730,6 @@ void HOL::UserInterface::buildBindings()
 		rebuildActions = true;
 	}
 
-
 	ImGui::SeparatorText("Gesture Bindings");
 
 	if (ImGui::Button("Add Binding"))
@@ -751,9 +742,7 @@ void HOL::UserInterface::buildBindings()
 		ImGui::OpenPopup("RestoreDefaultsBindings");
 	}
 
-	if (ImGui::BeginPopupModal("RestoreDefaultsBindings",
-								NULL,
-								ImGuiWindowFlags_AlwaysAutoResize))
+	if (ImGui::BeginPopupModal("RestoreDefaultsBindings", NULL, ImGuiWindowFlags_AlwaysAutoResize))
 	{
 		ImGui::Text("Restore gesture bindings to default?");
 
@@ -804,20 +793,17 @@ void HOL::UserInterface::buildBindings()
 							  a.z + (b.z - a.z) * t,
 							  a.w + (b.w - a.w) * t);
 			};
-			ImVec4 rowBg
-				= (visibleBindingIndex % 2 == 0)
-					  ? blendColor(windowBg, frameBg, 0.20f)
-					  : blendColor(windowBg, frameBg, 0.10f);
+			ImVec4 rowBg = (visibleBindingIndex % 2 == 0) ? blendColor(windowBg, frameBg, 0.20f)
+														  : blendColor(windowBg, frameBg, 0.10f);
 			rowBg.w = 1.0f;
 
 			ImGui::PushStyleColor(ImGuiCol_ChildBg, rowBg);
-			ImGui::PushStyleVar(
-				ImGuiStyleVar_WindowPadding, ImVec2(scaleSize(8.0f), scaleSize(6.0f)));
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+								ImVec2(scaleSize(8.0f), scaleSize(6.0f)));
 			ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, scaleSize(4.0f));
 			ImGui::BeginChild("BindingRow",
 							  ImVec2(0, 0),
-							  ImGuiChildFlags_AutoResizeY
-								  | ImGuiChildFlags_AlwaysUseWindowPadding);
+							  ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
 
 			const float previewScale = this->mScale * 0.5f;
 			const float previewWidth = UiGraphics::bindingPreviewWidth(previewScale, binding);
@@ -849,7 +835,7 @@ void HOL::UserInterface::buildBindings()
 							   "%s",
 							   GestureBindings::inputTargetName(binding.target));
 
-			//ImGui::SetCursorPosX(leftIndent);
+			// ImGui::SetCursorPosX(leftIndent);
 			if (ImGui::Button("Edit"))
 			{
 				mEditBindingIndex = i;
@@ -879,8 +865,7 @@ void HOL::UserInterface::buildBindings()
 			}
 			ImGui::SameLine();
 			const bool expanded = mExpandedBindingDebugRows.contains(i);
-			if (ImGui::ArrowButton(
-					"##debugExpand", expanded ? ImGuiDir_Down : ImGuiDir_Right))
+			if (ImGui::ArrowButton("##debugExpand", expanded ? ImGuiDir_Down : ImGuiDir_Right))
 			{
 				if (expanded)
 				{
@@ -895,7 +880,8 @@ void HOL::UserInterface::buildBindings()
 			{
 				ImGui::SameLine();
 				std::string modifierDescription;
-				for (size_t modifierIndex = 0; modifierIndex < modifierLabels.size(); modifierIndex++)
+				for (size_t modifierIndex = 0; modifierIndex < modifierLabels.size();
+					 modifierIndex++)
 				{
 					if (modifierIndex > 0)
 					{
@@ -922,7 +908,8 @@ void HOL::UserInterface::buildBindings()
 			{
 				const float rightEdgeX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
 				const float previewX = rightEdgeX - previewWidth - previewRightPadding;
-				const float previewY = rowStartY + std::max(0.0f, (leftHeight - previewHeight) * 0.5f);
+				const float previewY
+					= rowStartY + std::max(0.0f, (leftHeight - previewHeight) * 0.5f);
 				ImGui::SameLine(std::max(ImGui::GetCursorPosX() + spacing, previewX));
 				ImGui::SetCursorPosY(previewY);
 				UiGraphics::drawBindingPreview(previewScale, binding);
@@ -982,11 +969,11 @@ void HOL::UserInterface::buildBindings()
 		b.side = static_cast<HandSide>(sideValue);
 		ImGui::Separator();
 
-		const std::array<settings::GestureKind, 4> editableKinds = {
-			settings::GestureKind::Proximity,
-			settings::GestureKind::Chain,
-			settings::GestureKind::Grip,
-			settings::GestureKind::SystemAim};
+		const std::array<settings::GestureKind, 4> editableKinds
+			= {settings::GestureKind::Proximity,
+			   settings::GestureKind::Chain,
+			   settings::GestureKind::Grip,
+			   settings::GestureKind::SystemAim};
 
 		int kindIndex = 0;
 		for (int i = 0; i < static_cast<int>(editableKinds.size()); i++)
@@ -1004,8 +991,7 @@ void HOL::UserInterface::buildBindings()
 			for (int i = 0; i < static_cast<int>(editableKinds.size()); i++)
 			{
 				const bool selected = kindIndex == i;
-				if (ImGui::Selectable(
-						GestureBindings::gestureKindName(editableKinds[i]), selected))
+				if (ImGui::Selectable(GestureBindings::gestureKindName(editableKinds[i]), selected))
 				{
 					b.kind = editableKinds[i];
 					ensureCompatibleTarget(b);
@@ -1029,8 +1015,8 @@ void HOL::UserInterface::buildBindings()
 
 		if (b.kind == settings::GestureKind::Proximity)
 		{
-			const std::array<FingerType, 4> fingers = {
-				FingerIndex, FingerMiddle, FingerRing, FingerLittle};
+			const std::array<FingerType, 4> fingers
+				= {FingerIndex, FingerMiddle, FingerRing, FingerLittle};
 			int fingerIndex = 0;
 			for (int i = 0; i < static_cast<int>(fingers.size()); i++)
 			{
@@ -1052,20 +1038,17 @@ void HOL::UserInterface::buildBindings()
 				}
 			}
 
-			bool requiresClosedHand = settings::hasGestureModifier(
-				b.modifiers, settings::GestureModifier::ClosedHand);
+			bool requiresClosedHand
+				= settings::hasGestureModifier(b.modifiers, settings::GestureModifier::ClosedHand);
 			ImGui::BeginDisabled(b.proximityFinger != FingerIndex);
 			if (ImGui::Checkbox("Closed Hand", &requiresClosedHand))
 			{
 				settings::setGestureModifier(
-					b.modifiers,
-					settings::GestureModifier::ClosedHand,
-					requiresClosedHand);
+					b.modifiers, settings::GestureModifier::ClosedHand, requiresClosedHand);
 			}
 			ImGui::EndDisabled();
 
-			if (settings::hasGestureModifier(
-					b.modifiers, settings::GestureModifier::ClosedHand))
+			if (settings::hasGestureModifier(b.modifiers, settings::GestureModifier::ClosedHand))
 			{
 				ImGui::SameLine();
 				ImGui::TextDisabled("(Closed Hand)");
@@ -1078,10 +1061,7 @@ void HOL::UserInterface::buildBindings()
 		{
 			int chainLength = b.chainLength;
 			if (ImGui::SliderInt(
-					"Tap Count",
-					&chainLength,
-					1,
-					settings::GestureBinding::MaxChainLength))
+					"Tap Count", &chainLength, 1, settings::GestureBinding::MaxChainLength))
 			{
 				b.chainLength = chainLength;
 			}
@@ -1124,11 +1104,10 @@ void HOL::UserInterface::buildBindings()
 		auto rightAlignCheckbox = [](const char* label, bool* value)
 		{
 			float availableWidth = ImGui::GetContentRegionAvail().x;
-			float checkboxWidth = ImGui::GetFrameHeight()
-								  + ImGui::GetStyle().ItemInnerSpacing.x
+			float checkboxWidth = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x
 								  + ImGui::CalcTextSize(label, nullptr, true).x;
-			ImGui::SetCursorPosX(
-				ImGui::GetCursorPosX() + std::max(0.0f, availableWidth - checkboxWidth));
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX()
+								 + std::max(0.0f, availableWidth - checkboxWidth));
 			return ImGui::Checkbox(label, value);
 		};
 
@@ -1184,8 +1163,8 @@ void HOL::UserInterface::buildBindings()
 			}
 		}
 
-		bool usePalmFacing = settings::hasGestureModifier(
-			b.modifiers, settings::GestureModifier::PalmFacingUser);
+		bool usePalmFacing
+			= settings::hasGestureModifier(b.modifiers, settings::GestureModifier::PalmFacingUser);
 		if (ImGui::Checkbox("Palm Facing User", &usePalmFacing))
 		{
 			settings::setGestureModifier(
@@ -1205,10 +1184,9 @@ void HOL::UserInterface::buildBindings()
 				b.invertedModifiers, settings::GestureModifier::PalmFacingUser);
 			if (rightAlignCheckbox("Invert##PalmFacingUser", &invertPalmFacing))
 			{
-				settings::setInvertedGestureModifier(
-					b.invertedModifiers,
-					settings::GestureModifier::PalmFacingUser,
-					invertPalmFacing);
+				settings::setInvertedGestureModifier(b.invertedModifiers,
+													 settings::GestureModifier::PalmFacingUser,
+													 invertPalmFacing);
 			}
 		}
 
@@ -1374,21 +1352,21 @@ void HOL::UserInterface::buildBodyTrackers()
 
 	ImGui::SeparatorText("Left Arm Trackers");
 
-	syncSettings |= ImGui::Checkbox("Left Upper Arm",
-									&Config.bodyTrackers.enabled[static_cast<int>(
-										BodyTrackerRole::LeftUpperArm)]);
-	syncSettings |= ImGui::Checkbox("Left Lower Arm",
-									&Config.bodyTrackers.enabled[static_cast<int>(
-										BodyTrackerRole::LeftLowerArm)]);
+	syncSettings |= ImGui::Checkbox(
+		"Left Upper Arm",
+		&Config.bodyTrackers.enabled[static_cast<int>(BodyTrackerRole::LeftUpperArm)]);
+	syncSettings |= ImGui::Checkbox(
+		"Left Lower Arm",
+		&Config.bodyTrackers.enabled[static_cast<int>(BodyTrackerRole::LeftLowerArm)]);
 
 	ImGui::SeparatorText("Right Arm Trackers");
 
-	syncSettings |= ImGui::Checkbox("Right Upper Arm",
-									&Config.bodyTrackers.enabled[static_cast<int>(
-										BodyTrackerRole::RightUpperArm)]);
-	syncSettings |= ImGui::Checkbox("Right Lower Arm",
-									&Config.bodyTrackers.enabled[static_cast<int>(
-										BodyTrackerRole::RightLowerArm)]);
+	syncSettings |= ImGui::Checkbox(
+		"Right Upper Arm",
+		&Config.bodyTrackers.enabled[static_cast<int>(BodyTrackerRole::RightUpperArm)]);
+	syncSettings |= ImGui::Checkbox(
+		"Right Lower Arm",
+		&Config.bodyTrackers.enabled[static_cast<int>(BodyTrackerRole::RightLowerArm)]);
 
 	ImGui::EndChild();
 
@@ -1411,8 +1389,8 @@ void HOL::UserInterface::buildSteamVR()
 
 	ImGui::SeparatorText("Transmission");
 
-	syncSettings |= ImGui::Checkbox("Transmit legacy finger curl",
-									&Config.steamvr.transmitLegacyFingerCurl);
+	syncSettings
+		|= ImGui::Checkbox("Transmit legacy finger curl", &Config.steamvr.transmitLegacyFingerCurl);
 
 	syncSettings |= ImGui::Checkbox("Transmit SteamVR Input", &Config.steamvr.sendSteamVRInput);
 
@@ -1424,8 +1402,7 @@ void HOL::UserInterface::buildSteamVR()
 									&Config.steamvr.disableOtherControllersWhileHandTracking);
 
 	ImGui::SeparatorText("General");
-	ImGui::TextDisabled(
-		"Pose smoothing profile: %s", state::Runtime.isOVR ? "Oculus" : "Standard");
+	ImGui::TextDisabled("Pose smoothing profile: %s", state::Runtime.isOVR ? "Oculus" : "Standard");
 
 	syncSettings |= ImGui::InputFloat("Steam Pose offset (ms)",
 									  &Config.steamvr.poseSmoothing.steamPoseTimeOffsetMS,
@@ -1667,8 +1644,7 @@ void HOL::UserInterface::buildSteamVR()
 		float cellWidth = std::max(1.0f, ImGui::GetContentRegionAvail().x);
 		float size = ImGui::GetTextLineHeight();
 		float xOffset = std::max(0.0f, (cellWidth - size) * 0.5f);
-		float yOffset
-			= std::max(0.0f, (ImGui::GetFrameHeight() - size) * 0.5f);
+		float yOffset = std::max(0.0f, (ImGui::GetFrameHeight() - size) * 0.5f);
 		if (xOffset > 0.0f)
 		{
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + xOffset);
@@ -1677,8 +1653,7 @@ void HOL::UserInterface::buildSteamVR()
 		{
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + yOffset);
 		}
-		ImGui::ColorButton(
-			id.c_str(), color, ImGuiColorEditFlags_NoTooltip, ImVec2(size, size));
+		ImGui::ColorButton(id.c_str(), color, ImGuiColorEditFlags_NoTooltip, ImVec2(size, size));
 		if (ImGui::IsItemHovered())
 		{
 			ImGui::SetTooltip("%s", tooltip.c_str());
@@ -1866,9 +1841,9 @@ void HOL::UserInterface::buildControllerInput()
 		deviceSerials.push_back(serial);
 	}
 
-	if (!deviceSerials.empty() && (mSelectedTouchOverrideDeviceSerial.empty()
-								   || !discoveredButtonsByDeviceSerial.contains(
-									   mSelectedTouchOverrideDeviceSerial)))
+	if (!deviceSerials.empty()
+		&& (mSelectedTouchOverrideDeviceSerial.empty()
+			|| !discoveredButtonsByDeviceSerial.contains(mSelectedTouchOverrideDeviceSerial)))
 	{
 		mSelectedTouchOverrideDeviceSerial = deviceSerials.front();
 	}
@@ -1886,13 +1861,11 @@ void HOL::UserInterface::buildControllerInput()
 	}
 
 	if (mSelectedTouchOverrideButtonPath.empty()
-		|| std::find(availableButtons.begin(),
-					 availableButtons.end(),
-					 mSelectedTouchOverrideButtonPath)
-			== availableButtons.end())
+		|| std::find(
+			   availableButtons.begin(), availableButtons.end(), mSelectedTouchOverrideButtonPath)
+			   == availableButtons.end())
 	{
-		mSelectedTouchOverrideButtonPath
-			= availableButtons.empty() ? "" : availableButtons.front();
+		mSelectedTouchOverrideButtonPath = availableButtons.empty() ? "" : availableButtons.front();
 	}
 
 	const std::string selectedControllerLabel = mSelectedTouchOverrideDeviceSerial.empty()
@@ -1948,11 +1921,11 @@ void HOL::UserInterface::buildControllerInput()
 	{
 		auto& device = Config.deviceSettings.devices[mSelectedTouchOverrideDeviceSerial];
 		device.serial = mSelectedTouchOverrideDeviceSerial;
-		auto buttonIt = std::find_if(
-			device.inputOverrides.begin(),
-			device.inputOverrides.end(),
-			[&](const HOL::settings::ControllerButtonOverride& override)
-			{ return override.buttonPath == mSelectedTouchOverrideButtonPath; });
+		auto buttonIt
+			= std::find_if(device.inputOverrides.begin(),
+						   device.inputOverrides.end(),
+						   [&](const HOL::settings::ControllerButtonOverride& override)
+						   { return override.buttonPath == mSelectedTouchOverrideButtonPath; });
 		if (buttonIt == device.inputOverrides.end())
 		{
 			HOL::settings::ControllerButtonOverride newButtonOverride;
@@ -2000,18 +1973,16 @@ void HOL::UserInterface::buildControllerInput()
 				ImGui::TextUnformatted(buttonLabel.c_str());
 
 				ImGui::TableNextColumn();
-				if (ImGui::Checkbox(("##suppressTouch_" + serial + "_"
-									 + buttonOverride.buttonPath)
-										.c_str(),
-									&buttonOverride.suppressTouch))
+				if (ImGui::Checkbox(
+						("##suppressTouch_" + serial + "_" + buttonOverride.buttonPath).c_str(),
+						&buttonOverride.suppressTouch))
 				{
 					syncSettings = true;
 				}
 
 				ImGui::TableNextColumn();
 				if (ImGui::Button(
-						("Delete##touchOverride_" + serial + "_"
-						 + buttonOverride.buttonPath)
+						("Delete##touchOverride_" + serial + "_" + buttonOverride.buttonPath)
 							.c_str()))
 				{
 					removeDeviceSerial = serial;
@@ -2029,8 +2000,8 @@ void HOL::UserInterface::buildControllerInput()
 		if (deviceIt != Config.deviceSettings.devices.end()
 			&& removeButtonIndex < static_cast<int>(deviceIt->second.inputOverrides.size()))
 		{
-			deviceIt->second.inputOverrides.erase(
-				deviceIt->second.inputOverrides.begin() + removeButtonIndex);
+			deviceIt->second.inputOverrides.erase(deviceIt->second.inputOverrides.begin()
+												  + removeButtonIndex);
 		}
 		syncSettings = true;
 	}
@@ -2078,11 +2049,10 @@ void HOL::UserInterface::buildMain()
 
 	ImGui::Text("Tracking source:");
 	ImGui::SameLine();
-	ImGui::Text(
-		"%s",
-		HOL::state::Runtime.trackingProvider == HOL::state::TrackingProvider::OpenXR
-			? "OpenXR"
-			: "SteamVR Driver");
+	ImGui::Text("%s",
+				HOL::state::Runtime.trackingProvider == HOL::state::TrackingProvider::OpenXR
+					? "OpenXR"
+					: "SteamVR Driver");
 	ImGui::SameLine();
 	switch (HOL::state::Runtime.trackingProviderState)
 	{
@@ -2104,13 +2074,11 @@ void HOL::UserInterface::buildMain()
 	{
 		ImGui::TextColored(openXrStateColor,
 						   "%s",
-						   HOL::OpenXR::getOpenXrStateString(
-							   HOL::state::Runtime.openxrState));
+						   HOL::OpenXR::getOpenXrStateString(HOL::state::Runtime.openxrState));
 	}
 	else
 	{
-		ImGui::TextColored(
-			ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "Not started (alternate source)");
+		ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "Not started (alternate source)");
 	}
 
 	// Driver connection status
@@ -2130,7 +2098,8 @@ void HOL::UserInterface::buildMain()
 	{
 		HOL::HandOfLesserCore::Current->syncSettings();
 	}
-	if (ImGui::Checkbox("Close app automatically with SteamVR", &Config.steamvr.closeAppOnSteamVRExit))
+	if (ImGui::Checkbox("Close app automatically with SteamVR",
+						&Config.steamvr.closeAppOnSteamVRExit))
 	{
 		HOL::HandOfLesserCore::Current->syncSettings();
 	}
@@ -2231,8 +2200,7 @@ void HOL::UserInterface::buildMain()
 	{
 		showWrappedTooltip("How often to retrieve hand tracking data and submit controller poses.");
 	}
-	if (ImGui::InputInt(
-			"Skeletal Update Interval (ms)", &Config.general.skeletalUpdateIntervalMS))
+	if (ImGui::InputInt("Skeletal Update Interval (ms)", &Config.general.skeletalUpdateIntervalMS))
 	{
 		if (Config.general.skeletalUpdateIntervalMS < 1)
 		{
@@ -2329,9 +2297,8 @@ void HOL::UserInterface::buildMain()
 			ImGui::BeginDisabled();
 		}
 
-		if (ImGui::RadioButton(std::get<0>(buttonContent).c_str(),
-							   &displayedControllerMode,
-							   buttonMode))
+		if (ImGui::RadioButton(
+				std::get<0>(buttonContent).c_str(), &displayedControllerMode, buttonMode))
 		{
 			HOL::Config.handPose.controllerMode
 				= static_cast<HOL::ControllerMode>(displayedControllerMode);
@@ -2347,8 +2314,9 @@ void HOL::UserInterface::buildMain()
 		{
 			if (modeDisabled)
 			{
-				showWrappedTooltip("SteamVR hand-tracking controllers use a nonstandard input "
-								   "profile. Use a separate emulated controller for normal inputs.");
+				showWrappedTooltip(
+					"SteamVR hand-tracking controllers use a nonstandard input "
+					"profile. Use a separate emulated controller for normal inputs.");
 			}
 			else
 			{
@@ -2443,12 +2411,30 @@ void HOL::UserInterface::buildMain()
 	ImGui::SeparatorText("Skeletal Tracking Level");
 
 	bool hookedTrackingLevelConfigurable = display::DriverStatus.hasNormalControllers
-		&& display::DriverStatus.hasHandTrackingControllers;
+										   && display::DriverStatus.hasHandTrackingControllers;
+	const bool nativeSteamLinkProfile
+		= HOL::Config.handPose.controllerMode == HOL::ControllerMode::EmulateControllerMode
+		  && HOL::Config.handPose.emulatedControllerProfile
+				 == HOL::EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative;
 	bool trackingLevelLocked
-		= connected && HOL::Config.handPose.controllerMode == HOL::ControllerMode::HookedControllerMode
-		  && !hookedTrackingLevelConfigurable;
+		= nativeSteamLinkProfile
+		  || (connected
+			  && HOL::Config.handPose.controllerMode == HOL::ControllerMode::HookedControllerMode
+			  && !hookedTrackingLevelConfigurable);
 
 	ImVec2 trackingLevelStart = ImGui::GetCursorScreenPos();
+
+	int skeletalTrackingLevel = HOL::Config.skeletal.trackingLevel;
+	if (nativeSteamLinkProfile)
+	{
+		skeletalTrackingLevel = vr::VRSkeletalTracking_Full;
+	}
+	else if (trackingLevelLocked)
+	{
+		skeletalTrackingLevel = display::DriverStatus.hasHandTrackingControllers
+									? vr::VRSkeletalTracking_Full
+									: vr::VRSkeletalTracking_Partial;
+	}
 
 	if (trackingLevelLocked)
 	{
@@ -2457,23 +2443,15 @@ void HOL::UserInterface::buildMain()
 
 	ImGui::BeginGroup();
 
-	int skeletalTrackingLevel = HOL::Config.skeletal.trackingLevel;
-	if (trackingLevelLocked)
-	{
-		skeletalTrackingLevel = display::DriverStatus.hasHandTrackingControllers
-			? vr::VRSkeletalTracking_Full
-			: vr::VRSkeletalTracking_Partial;
-	}
-
 	bool updateSkeletalTrackingLevel = false;
-	updateSkeletalTrackingLevel |= ImGui::RadioButton(
-		"Partial", &skeletalTrackingLevel, vr::VRSkeletalTracking_Partial);
+	updateSkeletalTrackingLevel
+		|= ImGui::RadioButton("Partial", &skeletalTrackingLevel, vr::VRSkeletalTracking_Partial);
 	if (ImGui::IsItemHovered())
 	{
 		showWrappedTooltip("Expose skeletal input as partial finger tracking only.");
 	}
-	updateSkeletalTrackingLevel |= ImGui::RadioButton(
-		"Full", &skeletalTrackingLevel, vr::VRSkeletalTracking_Full);
+	updateSkeletalTrackingLevel
+		|= ImGui::RadioButton("Full", &skeletalTrackingLevel, vr::VRSkeletalTracking_Full);
 	if (ImGui::IsItemHovered())
 	{
 		showWrappedTooltip("Expose skeletal input as full hand tracking.");
@@ -2488,8 +2466,17 @@ void HOL::UserInterface::buildMain()
 
 		if (ImGui::IsMouseHoveringRect(trackingLevelStart, trackingLevelEnd))
 		{
-			showWrappedTooltip("Possess mode can only switch tracking level when both partial and "
-							   "full controllers are present.");
+			if (nativeSteamLinkProfile)
+			{
+				showWrappedTooltip("Native Steam Link hand controllers only support full skeletal "
+								   "tracking.");
+			}
+			else
+			{
+				showWrappedTooltip(
+					"Possess mode can only switch tracking level when both partial and "
+					"full controllers are present.");
+			}
 		}
 	}
 
@@ -2520,13 +2507,20 @@ void HOL::UserInterface::buildMain()
 		}
 
 		if (ImGui::RadioButton(
-				"SteamLink Hand",
+				"Steam Link Hands (Touch)",
 				(int*)&HOL::Config.handPose.emulatedControllerProfile,
-				HOL::EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand))
+				HOL::EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch))
 		{
 			HOL::HandOfLesserCore::Current->syncSettings();
 		}
 
+		if (ImGui::RadioButton(
+				"Steam Link Hands (Native)",
+				(int*)&HOL::Config.handPose.emulatedControllerProfile,
+				HOL::EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative))
+		{
+			HOL::HandOfLesserCore::Current->syncSettings();
+		}
 	}
 
 	/////////////////
@@ -2563,8 +2557,7 @@ void HOL::UserInterface::buildMain()
 		ImGui::BeginDisabled();
 	}
 
-	if (ImGui::Checkbox("Force hand primary",
-						&Config.trackingFeatures.forceMultimodalHandPrimary))
+	if (ImGui::Checkbox("Force hand primary", &Config.trackingFeatures.forceMultimodalHandPrimary))
 	{
 		HOL::HandOfLesserCore::Current->syncSettings();
 	}
@@ -2678,9 +2671,8 @@ void HOL::UserInterface::buildTracking()
 	}
 	else
 	{
-		ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
-						   "%.3f - Unavailable",
-						   bodyTrackingConfidence);
+		ImGui::TextColored(
+			ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%.3f - Unavailable", bodyTrackingConfidence);
 	}
 	if (ImGui::IsItemHovered())
 	{

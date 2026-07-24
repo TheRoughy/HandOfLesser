@@ -58,21 +58,20 @@ namespace HOL
 
 	void HandOfLesser::ReceiveDataThread()
 	{
-		DriverLog("ReceiveDataThread() start, active: %s",
-				  this->mActive.load() ? "true" : "false");
+		DriverLog("ReceiveDataThread() start, active: %s", this->mActive.load() ? "true" : "false");
 
 		// Wait for client connection (app to connect to our pipe)
 		DriverLog("Waiting for app to connect...");
 		while (this->mActive.load() && !this->mTransport.isConnected())
 		{
-				if (this->mTransport.waitForConnection(1000))
-				{
-					DriverLog("App connected!");
+			if (this->mTransport.waitForConnection(1000))
+			{
+				DriverLog("App connected!");
 
-					// Send initialization message
-					DriverInitializedPayload initPayload;
-					this->mTransport.sendPayload<NativePacketType::DriverInitialized>(initPayload);
-					requestSteamVRHandTrackingResync();
+				// Send initialization message
+				DriverInitializedPayload initPayload;
+				this->mTransport.sendPayload<NativePacketType::DriverInitialized>(initPayload);
+				requestSteamVRHandTrackingResync();
 				DriverLog("Sent DriverInitialized payload");
 				break;
 			}
@@ -88,15 +87,15 @@ namespace HOL
 				{
 					disableAppDrivenState();
 					DriverLog("App disconnected, waiting for reconnection...");
-						if (this->mTransport.waitForConnection(1000))
-						{
-							DriverLog("App reconnected!");
+					if (this->mTransport.waitForConnection(1000))
+					{
+						DriverLog("App reconnected!");
 
-							// Send initialization message again
-							DriverInitializedPayload initPayload;
-							this->mTransport.sendPayload<NativePacketType::DriverInitialized>(
-								initPayload);
-							requestSteamVRHandTrackingResync();
+						// Send initialization message again
+						DriverInitializedPayload initPayload;
+						this->mTransport.sendPayload<NativePacketType::DriverInitialized>(
+							initPayload);
+						requestSteamVRHandTrackingResync();
 						DriverLog("Sent DriverInitialized payload");
 					}
 				}
@@ -363,10 +362,8 @@ namespace HOL
 	void HandOfLesser::persistAutoLaunchSetting()
 	{
 		vr::EVRSettingsError error = vr::VRSettingsError_None;
-		vr::VRSettings()->SetBool("driver_00handoflesser",
-								  "autoLaunchApp",
-								  Config.steamvr.autoLaunchApp,
-								  &error);
+		vr::VRSettings()->SetBool(
+			"driver_00handoflesser", "autoLaunchApp", Config.steamvr.autoLaunchApp, &error);
 		if (error != vr::VRSettingsError_None)
 		{
 			DriverLog("Failed to persist autoLaunchApp setting. value=%d, settingsError=%d",
@@ -405,9 +402,13 @@ namespace HOL
 			}
 		}
 
-		if ((Config.handPose.emulatedControllerProfile
-				 != oldConfig.handPose.emulatedControllerProfile
-			 || Config.skeletal.trackingLevel != oldConfig.skeletal.trackingLevel)
+		const bool emulatedProfileChanged = Config.handPose.emulatedControllerProfile
+											!= oldConfig.handPose.emulatedControllerProfile;
+		const bool emulatedTrackingLevelChanged
+			= Config.skeletal.trackingLevel != oldConfig.skeletal.trackingLevel
+			  && Config.handPose.emulatedControllerProfile
+					 != EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative;
+		if ((emulatedProfileChanged || emulatedTrackingLevelChanged)
 			&& Config.handPose.controllerMode == ControllerMode::EmulateControllerMode)
 		{
 			devicesChanged = true;
@@ -418,7 +419,8 @@ namespace HOL
 		// Handle body tracker changes
 		bool trackersEnabledChanged
 			= Config.bodyTrackers.enableBodyTrackers != oldConfig.bodyTrackers.enableBodyTrackers;
-		bool anyTrackerSettingChanged = Config.bodyTrackers.enabled != oldConfig.bodyTrackers.enabled;
+		bool anyTrackerSettingChanged
+			= Config.bodyTrackers.enabled != oldConfig.bodyTrackers.enabled;
 
 		if (trackersEnabledChanged || anyTrackerSettingChanged)
 		{
@@ -435,7 +437,8 @@ namespace HOL
 
 		refreshPreferredHookedControllers();
 
-		if (Config.steamvr.showDevicePoseDiagnostics && !oldConfig.steamvr.showDevicePoseDiagnostics)
+		if (Config.steamvr.showDevicePoseDiagnostics
+			&& !oldConfig.steamvr.showDevicePoseDiagnostics)
 		{
 			sendAllDeviceStates();
 		}
@@ -472,8 +475,8 @@ namespace HOL
 				continue;
 			}
 
-			// Emulated controllers are cached by controller variant so the driver can switch between
-			// profile/tracking-level combinations without recreating devices each time.
+			// Emulated controllers are cached by controller variant so the driver can switch
+			// between profile/tracking-level combinations without recreating devices each time.
 			auto& controllerSlot = this->mAllEmulatedControllers[variant][i];
 			if (!controllerSlot)
 			{
@@ -640,15 +643,16 @@ namespace HOL
 
 			if (forceUpdate || emulationMode)
 			{
-				const bool emulatedHandTrackingPrimary = emulationMode && isHandTrackingPrimary(side);
+				const bool emulatedHandTrackingPrimary
+					= emulationMode && isHandTrackingPrimary(side);
 
 				for (const auto& hooked : getHookedControllers(side))
 				{
 					if (!hooked->isActingAsTracker())
 					{
-						const bool suppress = emulationMode ? emulatedHandTrackingPrimary
-														   : shouldSuppressHookedController(
-																 hooked.get());
+						const bool suppress = emulationMode
+												  ? emulatedHandTrackingPrimary
+												  : shouldSuppressHookedController(hooked.get());
 						const bool wasSuppressed = hooked->isSuppressed();
 						hooked->setSuppressed(suppress);
 						if (emulationMode && forceUpdate && suppress && wasSuppressed
@@ -665,7 +669,6 @@ namespace HOL
 				{
 					emulated->setConnectedState(emulatedHandTrackingPrimary);
 				}
-
 
 				// Ensure inactive controllers are disconnected
 				HOL::EmulatedControllerVariant activeVariant = HOL::getEmulatedControllerVariant(
@@ -763,8 +766,7 @@ namespace HOL
 		}
 
 		// Only the selected controller for a side should ever be possessed.
-		if (controller == nullptr
-			|| controller != getHookedController(controller->getSide()).get())
+		if (controller == nullptr || controller != getHookedController(controller->getSide()).get())
 		{
 			return false;
 		}
@@ -835,7 +837,7 @@ namespace HOL
 		}
 
 		// Recovery controller is the first pair of real controllers we encountered.
-		// If a driver provides hand-tracking controllers we may be hooking 
+		// If a driver provides hand-tracking controllers we may be hooking
 		// those instead of the real controllers, but still want to use the real
 		// controls to determine whether or not we should stop hand tracking entirely.
 		auto recoveryControllerOwner = getRecoveryHookedController(controller->getSide());
@@ -846,8 +848,7 @@ namespace HOL
 		const bool hasCurrentHandPose = side >= 0 && side < HOL::HandSide_MAX
 										&& mHasHandTransform[side]
 										&& mLastHandTransforms[side].valid;
-		const bool currentHandTracked
-			= hasCurrentHandPose && mLastHandTransforms[side].tracked;
+		const bool currentHandTracked = hasCurrentHandPose && mLastHandTransforms[side].tracked;
 		bool recoveryPoseValid = recoveryController->mLastOriginalPoseValid;
 		bool recoveryPoseFresh = recoveryPoseValid
 								 && recoveryController->framesSinceLastPoseUpdate
@@ -883,8 +884,7 @@ namespace HOL
 			controller->mHandTrackingDebounceFrames = 0;
 		}
 
-		if (controller->mHandTrackingDebounceFrames
-			>= HookedController::HandTrackingDebounceTime)
+		if (controller->mHandTrackingDebounceFrames >= HookedController::HandTrackingDebounceTime)
 		{
 			controller->mHandTrackingState = controller->mHandTrackingTargetState;
 		}
@@ -1179,12 +1179,13 @@ namespace HOL
 			return;
 		}
 
-		// Full skeletal tracking distinguishes native hand-tracking devices from normal controllers.
-		// Only SteamVR runtime sessions need their data forwarded back to the application.
+		// Full skeletal tracking distinguishes native hand-tracking devices from normal
+		// controllers. Only SteamVR runtime sessions need their data forwarded back to the
+		// application.
 		auto bestController
 			= Runtime.trackingProvider == HOL::state::TrackingProvider::SteamVRDriver
-			? findBestHookedController(side, vr::VRSkeletalTracking_Full, "", true)
-			: nullptr;
+				  ? findBestHookedController(side, vr::VRSkeletalTracking_Full, "", true)
+				  : nullptr;
 		auto previousController = mForwardedHandTrackingControllers[side].load();
 		mForwardedHandTrackingControllers[side].store(bestController);
 		if (previousController != bestController)
@@ -1198,8 +1199,7 @@ namespace HOL
 		}
 	}
 
-	bool HandOfLesser::isForwardedHandTrackingController(
-		const HookedController* controller) const
+	bool HandOfLesser::isForwardedHandTrackingController(const HookedController* controller) const
 	{
 		if (controller == nullptr || controller->mSide < HandSide::LeftHand
 			|| controller->mSide >= HandSide::HandSide_MAX)
@@ -1210,11 +1210,11 @@ namespace HOL
 		return mForwardedHandTrackingControllers[controller->mSide].load().get() == controller;
 	}
 
-	std::shared_ptr<HookedController> HandOfLesser::findBestHookedController(
-		HOL::HandSide side,
-		vr::EVRSkeletalTrackingLevel requestedTrackingLevel,
-		const std::string& preferredSerial,
-		bool requireExactTrackingLevel) const
+	std::shared_ptr<HookedController>
+	HandOfLesser::findBestHookedController(HOL::HandSide side,
+										   vr::EVRSkeletalTrackingLevel requestedTrackingLevel,
+										   const std::string& preferredSerial,
+										   bool requireExactTrackingLevel) const
 	{
 		auto controllers = getHookedControllers(side);
 		if (!preferredSerial.empty())
@@ -1266,8 +1266,8 @@ namespace HOL
 		std::shared_ptr<HookedController> recoveryController;
 		for (const auto& controller : getHookedControllers(side))
 		{
-			// Full skeletal tracking indicates the dedicated hand-tracking controller pair, which is
-			// not useful as the signal that native controller tracking has returned.
+			// Full skeletal tracking indicates the dedicated hand-tracking controller pair, which
+			// is not useful as the signal that native controller tracking has returned.
 			if (controller->mSkeletonTrackingLevel == vr::VRSkeletalTracking_Full)
 			{
 				continue;
@@ -1312,6 +1312,13 @@ namespace HOL
 
 	vr::EVRSkeletalTrackingLevel HandOfLesser::getRequestedSkeletalTrackingLevel() const
 	{
+		if (Config.handPose.emulatedControllerProfile
+			== EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
+		{
+			// Steam Link's native hand input profile has no partial-tracking variant.
+			return vr::VRSkeletalTracking_Full;
+		}
+
 		return Config.skeletal.trackingLevel;
 	}
 
@@ -1328,8 +1335,9 @@ namespace HOL
 
 		if (Runtime.isSteamVR)
 		{
-			// SteamVR-runtime sources must be actively submitting a healthy native pose. Full skeletal
-			// devices are preferred because they are the native hand-tracking controller pair.
+			// SteamVR-runtime sources must be actively submitting a healthy native pose. Full
+			// skeletal devices are preferred because they are the native hand-tracking controller
+			// pair.
 			if (!controller->nativePoseHealthy())
 			{
 				return std::numeric_limits<int>::lowest();
@@ -1370,8 +1378,7 @@ namespace HOL
 		return score;
 	}
 
-	std::shared_ptr<HookedController>
-	HandOfLesser::getHookedControllerByDeviceId(uint32_t deviceId)
+	std::shared_ptr<HookedController> HandOfLesser::getHookedControllerByDeviceId(uint32_t deviceId)
 	{
 		auto hookedControllers = mHookedControllers.load();
 		for (const auto& controller : *hookedControllers)
@@ -1385,8 +1392,7 @@ namespace HOL
 		return nullptr;
 	}
 
-	std::shared_ptr<HookedController>
-	HandOfLesser::getHookedControllerBySerial(std::string serial)
+	std::shared_ptr<HookedController> HandOfLesser::getHookedControllerBySerial(std::string serial)
 	{
 		auto hookedControllers = mHookedControllers.load();
 		for (const auto& controller : *hookedControllers)
@@ -1444,8 +1450,9 @@ namespace HOL
 		return nullptr;
 	}
 
-	GenericControllerInterface* HandOfLesser::GetActiveController(
-		HOL::HandSide side, std::shared_ptr<HookedController>& hookedControllerOwner)
+	GenericControllerInterface*
+	HandOfLesser::GetActiveController(HOL::HandSide side,
+									  std::shared_ptr<HookedController>& hookedControllerOwner)
 	{
 		hookedControllerOwner.reset();
 
@@ -1655,7 +1662,8 @@ namespace HOL
 			updateControllerConnectionStates();
 
 			// TODO: only run if using index controller
-			EmulatedControllerDriver* leftController = this->getEmulatedController(HandSide::LeftHand);
+			EmulatedControllerDriver* leftController
+				= this->getEmulatedController(HandSide::LeftHand);
 			EmulatedControllerDriver* rightController
 				= this->getEmulatedController(HandSide::RightHand);
 
@@ -1703,8 +1711,8 @@ namespace HOL
 		if (Config.steamvr.showDevicePoseDiagnostics)
 		{
 			uint64_t nowMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
-							 std::chrono::system_clock::now().time_since_epoch())
-							 .count();
+								 std::chrono::system_clock::now().time_since_epoch())
+								 .count();
 			for (const auto& controller : *hookedControllers)
 			{
 				if (controller->mLastOriginalPoseSubmitTimeMs == 0)
@@ -1741,12 +1749,10 @@ namespace HOL
 		mSteamVRHandTrackingCondition.notify_one();
 	}
 
-	void HandOfLesser::updateHandTipPose(HOL::HandSide side,
-									 const HOL::PoseLocation& palmPose)
+	void HandOfLesser::updateHandTipPose(HOL::HandSide side, const HOL::PoseLocation& palmPose)
 	{
 		if (Config.handPose.controllerMode != ControllerMode::EmulateControllerMode
-			|| Config.handPose.emulatedControllerProfile
-				   != EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+			|| !isSteamLinkHandProfile(Config.handPose.emulatedControllerProfile))
 		{
 			return;
 		}
@@ -1759,9 +1765,8 @@ namespace HOL
 			return;
 		}
 
-		const auto tipPose
-			= SteamVR::HandTipPoseGenerator::generate(
-				side, palmPose, controller->GetPose(), *hmdPose);
+		const auto tipPose = SteamVR::HandTipPoseGenerator::generate(
+			side, palmPose, controller->GetPose(), *hmdPose);
 		if (tipPose)
 		{
 			controller->UpdateTipPose(*tipPose);
@@ -1772,8 +1777,7 @@ namespace HOL
 	// another driver's pose/skeleton callback thread.
 	void HandOfLesser::steamVRHandTrackingThread()
 	{
-		std::array<HookedController::ForwardedHandState, HandSide::HandSide_MAX>
-			forwardingStates{};
+		std::array<HookedController::ForwardedHandState, HandSide::HandSide_MAX> forwardingStates{};
 		std::array<std::shared_ptr<HookedController>, HandSide::HandSide_MAX> sources{};
 		HookedController::ForwardedHmdPoseState hmdPoseState;
 		std::shared_ptr<HookedController> hmdSource;
@@ -1783,9 +1787,10 @@ namespace HOL
 			if (nextWakeTime != (std::chrono::steady_clock::time_point::min)())
 			{
 				std::unique_lock lock(mSteamVRHandTrackingMutex);
-				const auto shouldWake = [this]() {
+				const auto shouldWake = [this]()
+				{
 					return !mActive.load() || mSteamVRHandTrackingPending.load()
-						|| mSteamVRHandTrackingResync.load();
+						   || mSteamVRHandTrackingResync.load();
 				};
 				if (nextWakeTime == (std::chrono::steady_clock::time_point::max)())
 				{
@@ -1803,8 +1808,8 @@ namespace HOL
 			}
 
 			// Send a full baseline when the skeleton changes, then smaller pose-only updates. Pose
-			// callbacks can run much faster than skeletal callbacks, so keeping them separate avoids
-			// repeatedly transmitting and converting the complete skeleton.
+			// callbacks can run much faster than skeletal callbacks, so keeping them separate
+			// avoids repeatedly transmitting and converting the complete skeleton.
 			mSteamVRHandTrackingPending.exchange(false);
 			const bool forceResync = mSteamVRHandTrackingResync.exchange(false);
 			const auto now = std::chrono::steady_clock::now();
@@ -1820,9 +1825,7 @@ namespace HOL
 			if (hmdSource)
 			{
 				const auto update = hmdSource->getForwardedHmdPoseUpdate(
-					hmdPoseState,
-					forwardingEnabled && selectedHmd == hmdSource,
-					forceResync);
+					hmdPoseState, forwardingEnabled && selectedHmd == hmdSource, forceResync);
 				if (update)
 				{
 					mTransport.sendPayload<NativePacketType::SteamVRHmdPose>(*update);
@@ -1848,11 +1851,11 @@ namespace HOL
 					continue;
 				}
 
-				auto updates = source->getForwardedHandUpdates(
-					forwardingStates[sideIndex],
-					forwardingEnabled && selectedSource == source,
-					forceResync,
-					now);
+				auto updates
+					= source->getForwardedHandUpdates(forwardingStates[sideIndex],
+													  forwardingEnabled && selectedSource == source,
+													  forceResync,
+													  now);
 				nextWakeTime = (std::min)(nextWakeTime, updates.staleDeadline);
 
 				if (updates.baseline)
@@ -2079,8 +2082,8 @@ namespace HOL
 		}
 	}
 
-	bool HandOfLesser::shouldSuppressTouchInput(
-		const HookedController* controller, const std::string& inputPath) const
+	bool HandOfLesser::shouldSuppressTouchInput(const HookedController* controller,
+												const std::string& inputPath) const
 	{
 		if (controller == nullptr || controller->serial.empty())
 		{

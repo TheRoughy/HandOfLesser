@@ -188,9 +188,10 @@ namespace HOL
 		{
 			None = 0,
 			Proximity, // Touch thumb + one other finger
-			Chain,     // Tap a configurable finger sequence
-			Grip,      // Curl middle+ring+little
-			SystemAim  // Oculus system gesture (head-facing)
+			Chain,	   // Tap a configurable finger sequence
+			Grip,	   // Curl middle+ring+little
+			SystemAim, // Oculus system gesture (head-facing)
+			IndexPoint // Internal Steam Link hand input
 		};
 
 		enum class GestureModifier : uint32_t
@@ -207,8 +208,7 @@ namespace HOL
 			return (modifiers & static_cast<uint32_t>(modifier)) != 0;
 		}
 
-		inline void setGestureModifier(
-			uint32_t& modifiers, GestureModifier modifier, bool enabled)
+		inline void setGestureModifier(uint32_t& modifiers, GestureModifier modifier, bool enabled)
 		{
 			if (enabled)
 			{
@@ -220,8 +220,9 @@ namespace HOL
 			}
 		}
 
-		inline void setInvertedGestureModifier(
-			uint32_t& invertedModifiers, GestureModifier modifier, bool enabled)
+		inline void setInvertedGestureModifier(uint32_t& invertedModifiers,
+											   GestureModifier modifier,
+											   bool enabled)
 		{
 			if (enabled)
 			{
@@ -251,6 +252,12 @@ namespace HOL
 			Toggle_SteamVRInput,
 			// Joystick (X/Z axes + touch — requires Proximity gesture)
 			Joystick,
+			// Native Steam Link hand inputs are not exposed by the configurable binding editor.
+			SteamLinkIndexPinch,
+			SteamLinkMiddlePinch,
+			SteamLinkRingPinch,
+			SteamLinkPinkyPinch,
+			SteamLinkIndexPoint,
 			InputTarget_MAX
 		};
 
@@ -258,6 +265,7 @@ namespace HOL
 
 		// Returns the default set of gesture bindings matching the previous hard-coded bindings.
 		std::vector<GestureBinding> defaultGestureBindings();
+		std::vector<GestureBinding> defaultSteamLinkHandGestureBindings();
 
 		// A single configurable gesture binding
 		struct GestureBinding
@@ -270,14 +278,11 @@ namespace HOL
 			// Gesture definition
 			GestureKind kind = GestureKind::None;
 			HOL::FingerType proximityFinger
-				= HOL::FingerIndex;         // Finger for Proximity kind (Index/Middle/Ring/Little)
-			std::array<HOL::FingerType, MaxChainLength> chainFingers = {
-				HOL::FingerIndex,
-				HOL::FingerMiddle,
-				HOL::FingerRing,
-				HOL::FingerLittle};
+				= HOL::FingerIndex; // Finger for Proximity kind (Index/Middle/Ring/Little)
+			std::array<HOL::FingerType, MaxChainLength> chainFingers
+				= {HOL::FingerIndex, HOL::FingerMiddle, HOL::FingerRing, HOL::FingerLittle};
 			int chainLength = MaxChainLength;
-			uint32_t modifiers = 0; // Gesture modifiers.
+			uint32_t modifiers = 0;			// Gesture modifiers.
 			uint32_t invertedModifiers = 0; // Modifiers whose output should be inverted.
 
 			// Output target — determines action/sink type.
@@ -346,8 +351,7 @@ namespace HOL
 			bool blockControllerInputWhileHandTracking = true;
 			bool disableOtherControllersWhileHandTracking = true;
 			bool showDevicePoseDiagnostics = false;
-			SteamVRPoseSmoothingSettings poseSmoothing
-				= defaultSteamVRPoseSmoothingSettings(false);
+			SteamVRPoseSmoothingSettings poseSmoothing = defaultSteamVRPoseSmoothingSettings(false);
 			SteamVRPoseSmoothingSettings standardPoseSmoothing
 				= defaultSteamVRPoseSmoothingSettings(false);
 			SteamVRPoseSmoothingSettings oculusPoseSmoothing
@@ -363,8 +367,8 @@ namespace HOL
 		{
 			bool enableBodyTrackers = false;
 
-			std::array<bool, static_cast<int>(HOL::BodyTrackerRole::TrackerRole_MAX)> enabled = {
-				true, true, true, true, true, true};
+			std::array<bool, static_cast<int>(HOL::BodyTrackerRole::TrackerRole_MAX)> enabled
+				= {true, true, true, true, true, true};
 		};
 
 		struct ControllerButtonOverride
@@ -378,14 +382,14 @@ namespace HOL
 			std::string serial;
 			vr::ETrackedDeviceClass role = vr::TrackedDeviceClass_Invalid;
 			std::vector<std::string> touchButtons; // Runtime flag, not saved to JSON
-			bool activatedThisSession = false; // Runtime flag, not saved to JSON
+			bool activatedThisSession = false;	   // Runtime flag, not saved to JSON
 			vr::EVRSkeletalTrackingLevel trackingLevel
 				= vr::VRSkeletalTracking_Estimated; // Runtime flag, not saved to JSON
-			bool nativePoseIsValid = false;		  // Runtime flag, not saved to JSON
-			bool nativeDeviceIsConnected = false; // Runtime flag, not saved to JSON
+			bool nativePoseIsValid = false;			// Runtime flag, not saved to JSON
+			bool nativeDeviceIsConnected = false;	// Runtime flag, not saved to JSON
 			vr::ETrackingResult nativeTrackingResult
 				= vr::TrackingResult_Uninitialized; // Runtime flag, not saved to JSON
-			uint64_t nativePoseAgeMs = 0;		 // Runtime flag, not saved to JSON
+			uint64_t nativePoseAgeMs = 0;			// Runtime flag, not saved to JSON
 
 			// Shadow tracker settings
 			bool actAsTracker = false; // Make this device appear as a tracker

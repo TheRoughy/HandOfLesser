@@ -90,18 +90,19 @@ namespace HOL
 			container,
 			vr::Prop_RenderModelName_String,
 			getEmulatedControllerRenderModelName(my_emulated_profile_, isLeftHand));
-		props->SetStringProperty(
-			container, vr::Prop_ResourceRoot_String, getEmulatedControllerResourceRoot(my_emulated_profile_));
+		props->SetStringProperty(container,
+								 vr::Prop_ResourceRoot_String,
+								 getEmulatedControllerResourceRoot(my_emulated_profile_));
 		props->SetStringProperty(
 			container,
 			vr::Prop_RegisteredDeviceType_String,
 			getEmulatedControllerRegisteredType(my_emulated_profile_, isLeftHand));
-		props->SetStringProperty(
-			container,
-			vr::Prop_InputProfilePath_String,
-			getEmulatedControllerInputProfilePath(my_emulated_profile_));
-		props->SetStringProperty(
-			container, vr::Prop_ControllerType_String, getEmulatedControllerTypeString(my_emulated_profile_));
+		props->SetStringProperty(container,
+								 vr::Prop_InputProfilePath_String,
+								 getEmulatedControllerInputProfilePath(my_emulated_profile_));
+		props->SetStringProperty(container,
+								 vr::Prop_ControllerType_String,
+								 getEmulatedControllerTypeString(my_emulated_profile_));
 		setEmulatedControllerIconProperties(props, container, my_emulated_profile_, isLeftHand);
 		// Let's set up handles for all of our components.
 		// Even though these are also defined in our input profile,
@@ -109,15 +110,40 @@ namespace HOL
 
 		auto input = vr::VRDriverInput();
 
-		if (usesTouchControllerLayout(my_emulated_profile_))
+		if (my_emulated_profile_
+			== EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
 		{
-			// Oculus layout: left has X/Y, right has A/B.
+			createScalarComponent(container, input, InputHandleType::index_pinch_value);
+			createScalarComponent(container, input, InputHandleType::middle_pinch_value);
+			createScalarComponent(container, input, InputHandleType::ring_pinch_value);
+			createScalarComponent(container, input, InputHandleType::pinky_pinch_value);
+			createScalarComponent(container, input, InputHandleType::grip_value);
+			createBooleanComponent(container, input, InputHandleType::index_point_touch);
+			createScalarComponent(container, input, InputHandleType::index_point_value);
 			if (isLeftHand)
 			{
-				createBooleanComponent(container, input, InputHandleType::x_touch);
-				createBooleanComponent(container, input, InputHandleType::x_click);
-				createBooleanComponent(container, input, InputHandleType::y_touch);
-				createBooleanComponent(container, input, InputHandleType::y_click);
+				createBooleanComponent(container, input, InputHandleType::system_click);
+			}
+		}
+		else
+		{
+			if (usesTouchControllerLayout(my_emulated_profile_))
+			{
+				// Oculus layout: left has X/Y, right has A/B.
+				if (isLeftHand)
+				{
+					createBooleanComponent(container, input, InputHandleType::x_touch);
+					createBooleanComponent(container, input, InputHandleType::x_click);
+					createBooleanComponent(container, input, InputHandleType::y_touch);
+					createBooleanComponent(container, input, InputHandleType::y_click);
+				}
+				else
+				{
+					createBooleanComponent(container, input, InputHandleType::a_touch);
+					createBooleanComponent(container, input, InputHandleType::a_click);
+					createBooleanComponent(container, input, InputHandleType::b_touch);
+					createBooleanComponent(container, input, InputHandleType::b_click);
+				}
 			}
 			else
 			{
@@ -126,70 +152,62 @@ namespace HOL
 				createBooleanComponent(container, input, InputHandleType::b_touch);
 				createBooleanComponent(container, input, InputHandleType::b_click);
 			}
+
+			// Stick input (profile-specific naming).
+			if (usesTouchControllerLayout(my_emulated_profile_))
+			{
+				createScalarComponent(container, input, InputHandleType::joystick_x);
+				createScalarComponent(container, input, InputHandleType::joystick_y);
+				createBooleanComponent(container, input, InputHandleType::joystick_touch);
+				createBooleanComponent(container, input, InputHandleType::joystick_click);
+			}
+			else
+			{
+				createScalarComponent(container, input, InputHandleType::thumbstick_x);
+				createScalarComponent(container, input, InputHandleType::thumbstick_y);
+				createBooleanComponent(container, input, InputHandleType::thumbstick_touch);
+				createBooleanComponent(container, input, InputHandleType::thumbstick_click);
+			}
+
+			// Let's set up our trigger. We've defined it to have a value and click component.
+
+			// CreateScalarComponent requires:
+			// EVRScalarType - whether the device can give an absolute position, or just one
+			// relative to where it was last. We can do it absolute. EVRScalarUnits - whether the
+			// devices has two "sides", like a joystick. This makes the range of valid inputs -1
+			// to 1. Otherwise, it's 0 to 1. We only have one "side", so ours is onesided.
+
+			///////////
+			// Trigger
+			///////////
+
+			createScalarComponent(container, input, InputHandleType::trigger_value);
+			createBooleanComponent(container, input, InputHandleType::trigger_touch);
+			createBooleanComponent(container, input, InputHandleType::trigger_click);
+
+			//////////
+			// Grip
+			//////////
+
+			createScalarComponent(container, input, InputHandleType::grip_value);
+			createScalarComponent(container, input, InputHandleType::grip_force);
+			createBooleanComponent(container, input, InputHandleType::grip_touch);
+
+			//////////////////
+			// Finger curl
+			/////////////////
+
+			createScalarComponent(container, input, InputHandleType::finger_index);
+			createScalarComponent(container, input, InputHandleType::finger_middle);
+			createScalarComponent(container, input, InputHandleType::finger_ring);
+			createScalarComponent(container, input, InputHandleType::finger_pinky);
+
+			////////////////
+			// Buttons
+			////////////////
+
+			createBooleanComponent(container, input, InputHandleType::system_click);
 		}
-		else
-		{
-			// Index layout: A/B on both hands.
-			createBooleanComponent(container, input, InputHandleType::a_touch);
-			createBooleanComponent(container, input, InputHandleType::a_click);
-			createBooleanComponent(container, input, InputHandleType::b_touch);
-			createBooleanComponent(container, input, InputHandleType::b_click);
-		}
-
-		// Stick input (profile-specific naming).
-		if (usesTouchControllerLayout(my_emulated_profile_))
-		{
-			createScalarComponent(container, input, InputHandleType::joystick_x);
-			createScalarComponent(container, input, InputHandleType::joystick_y);
-			createBooleanComponent(container, input, InputHandleType::joystick_touch);
-			createBooleanComponent(container, input, InputHandleType::joystick_click);
-		}
-		else
-		{
-			createScalarComponent(container, input, InputHandleType::thumbstick_x);
-			createScalarComponent(container, input, InputHandleType::thumbstick_y);
-			createBooleanComponent(container, input, InputHandleType::thumbstick_touch);
-			createBooleanComponent(container, input, InputHandleType::thumbstick_click);
-		}
-
-		// Let's set up our trigger. We've defined it to have a value and click component.
-
-		// CreateScalarComponent requires:
-		// EVRScalarType - whether the device can give an absolute position, or just one relative to
-		// where it was last. We can do it absolute. EVRScalarUnits - whether the devices has two
-		// "sides", like a joystick. This makes the range of valid inputs -1 to 1. Otherwise, it's 0
-		// to 1. We only have one "side", so ours is onesided.
-
-		///////////
-		// Trigger
-		///////////
-
-		createScalarComponent(container, input, InputHandleType::trigger_value);
-		createBooleanComponent(container, input, InputHandleType::trigger_touch);
-		createBooleanComponent(container, input, InputHandleType::trigger_click);
-
-		//////////
-		// Grip
-		//////////
-
-		createScalarComponent(container, input, InputHandleType::grip_value);
-		createScalarComponent(container, input, InputHandleType::grip_force);
-		createBooleanComponent(container, input, InputHandleType::grip_touch);
-
-		//////////////////
-		// Finger curl
-		/////////////////
-
-		createScalarComponent(container, input, InputHandleType::finger_index);
-		createScalarComponent(container, input, InputHandleType::finger_middle);
-		createScalarComponent(container, input, InputHandleType::finger_ring);
-		createScalarComponent(container, input, InputHandleType::finger_pinky);
-
-		////////////////
-		// Buttons
-		////////////////
-
-		createBooleanComponent(container, input, InputHandleType::system_click);
 
 		////////////////
 		// Skeleton
@@ -213,8 +231,7 @@ namespace HOL
 			&mInputHandles[InputHandleType::skeleton] // Bind the component to a handle.
 		);
 
-		if (my_emulated_profile_
-			== EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		if (usesSteamLinkHandModel(my_emulated_profile_))
 		{
 			const auto poseError
 				= input->CreatePoseComponent(container, "/pose/tip", &mTipPoseHandle);
@@ -325,7 +342,8 @@ namespace HOL
 													InputHandleType type)
 	{
 		vr::EVRScalarUnits units = vr::VRScalarUnits_NormalizedOneSided;
-		// Stick X/Y are centered axes (-1..1); trigger, grip, and finger values are one-sided (0..1).
+		// Stick X/Y are centered axes (-1..1); trigger, grip, and finger values are one-sided
+		// (0..1).
 		if (type == InputHandleType::thumbstick_x || type == InputHandleType::thumbstick_y
 			|| type == InputHandleType::joystick_x || type == InputHandleType::joystick_y)
 		{
@@ -358,14 +376,18 @@ namespace HOL
 
 		auto driverInput = vr::VRDriverInput();
 		HandSide side = my_controller_role_ == vr::TrackedControllerRole_LeftHand
-			? HandSide::LeftHand
-			: HandSide::RightHand;
+							? HandSide::LeftHand
+							: HandSide::RightHand;
 		std::string inputName = mapEmulatedInputPath(my_emulated_profile_, side, input);
 
 		auto inputType = INPUT_TYPES.find(inputName);
 		if (inputType != INPUT_TYPES.end())
 		{
-			driverInput->UpdateBooleanComponent(mInputHandles[inputType->second], value, 0);
+			const auto handle = mInputHandles[inputType->second];
+			if (handle != vr::k_ulInvalidInputComponentHandle)
+			{
+				driverInput->UpdateBooleanComponent(handle, value, 0);
+			}
 		}
 	}
 
@@ -376,14 +398,18 @@ namespace HOL
 
 		auto driverInput = vr::VRDriverInput();
 		HandSide side = my_controller_role_ == vr::TrackedControllerRole_LeftHand
-			? HandSide::LeftHand
-			: HandSide::RightHand;
+							? HandSide::LeftHand
+							: HandSide::RightHand;
 		std::string inputName = mapEmulatedInputPath(my_emulated_profile_, side, input);
 
 		auto inputType = INPUT_TYPES.find(inputName);
 		if (inputType != INPUT_TYPES.end())
 		{
-			driverInput->UpdateScalarComponent(mInputHandles[inputType->second], value, 0);
+			const auto handle = mInputHandles[inputType->second];
+			if (handle != vr::k_ulInvalidInputComponentHandle)
+			{
+				driverInput->UpdateScalarComponent(handle, value, 0);
+			}
 		}
 	}
 
@@ -397,16 +423,14 @@ namespace HOL
 		SteamVR::buildSkeletalPoseFromPayload(*payload, mSkeletalPose);
 
 		vr::VRDriverInput()->UpdateSkeletonComponent(mInputHandles[InputHandleType::skeleton],
-												 vr::VRSkeletalMotionRange_WithoutController,
-												 mSkeletalPose,
-												 eBone_Count);
+													 vr::VRSkeletalMotionRange_WithoutController,
+													 mSkeletalPose,
+													 eBone_Count);
 	}
 
 	void EmulatedControllerDriver::UpdateTipPose(const vr::HmdMatrix34_t& transform)
 	{
-		if (my_emulated_profile_
-				!= EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand
-			|| !is_active_ || !mDeviceConnected
+		if (!usesSteamLinkHandModel(my_emulated_profile_) || !is_active_ || !mDeviceConnected
 			|| mTipPoseHandle == vr::k_ulInvalidInputComponentHandle)
 		{
 			return;

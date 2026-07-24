@@ -23,8 +23,8 @@ void HandTracking::init()
 	rebuildActions();
 }
 
-void HandTracking::initOpenXR(
-	xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session)
+void HandTracking::initOpenXR(xr::UniqueDynamicInstance& instance,
+							  xr::UniqueDynamicSession& session)
 {
 	HandTrackingInterface::init(instance);
 	this->initOpenXRHands(session);
@@ -40,12 +40,22 @@ void HandTracking::initOpenXRHands(xr::UniqueDynamicSession& session)
 
 void HOL::OpenXR::HandTracking::rebuildActions()
 {
-	auto newActionSet = std::make_shared<ActionSet>();
-	newActionSet->actionsByBindingIndex.resize(Config.input.gestureBindings.size());
+	this->mConfiguredActionSet.store(buildActionSet(Config.input.gestureBindings),
+									 std::memory_order_release);
+	this->mSteamLinkNativeActionSet.store(
+		buildActionSet(settings::defaultSteamLinkHandGestureBindings()), std::memory_order_release);
+}
 
-	for (size_t i = 0; i < Config.input.gestureBindings.size(); i++)
+std::shared_ptr<const HandTracking::ActionSet>
+HandTracking::buildActionSet(const std::vector<settings::GestureBinding>& bindings) const
+{
+	auto newActionSet = std::make_shared<ActionSet>();
+	newActionSet->bindings = bindings;
+	newActionSet->actionsByBindingIndex.resize(bindings.size());
+
+	for (size_t i = 0; i < bindings.size(); i++)
 	{
-		const auto& binding = Config.input.gestureBindings[i];
+		const auto& binding = bindings[i];
 
 		// Skip system aim bindings when the runtime doesn't support it
 		if (binding.kind == settings::GestureKind::SystemAim
@@ -63,12 +73,14 @@ void HOL::OpenXR::HandTracking::rebuildActions()
 		}
 	}
 
-	this->mActionSet.store(std::shared_ptr<const ActionSet>(newActionSet), std::memory_order_release);
+	return newActionSet;
 }
 
-std::shared_ptr<BaseAction> HOL::OpenXR::HandTracking::getActionForBindingIndex(size_t bindingIndex) const
+std::shared_ptr<BaseAction>
+HOL::OpenXR::HandTracking::getActionForBindingIndex(size_t bindingIndex) const
 {
-	std::shared_ptr<const ActionSet> actionSet = this->mActionSet.load(std::memory_order_acquire);
+	std::shared_ptr<const ActionSet> actionSet
+		= this->mConfiguredActionSet.load(std::memory_order_acquire);
 	if (!actionSet || bindingIndex >= actionSet->actionsByBindingIndex.size())
 	{
 		return nullptr;
@@ -77,28 +89,26 @@ std::shared_ptr<BaseAction> HOL::OpenXR::HandTracking::getActionForBindingIndex(
 	return actionSet->actionsByBindingIndex[bindingIndex];
 }
 
-void HandTracking::updateHands(XrSpace space,
-						   XrTime time,
-						   OpenXRBody& bodyTracker,
-						   bool skeletalUpdate,
-						   const std::array<
-							   const HOL::HandTrackingSample*, HOL::HandSide_MAX>& externalSamples)
+void HandTracking::updateHands(
+	XrSpace space,
+	XrTime time,
+	OpenXRBody& bodyTracker,
+	bool skeletalUpdate,
+	const std::array<const HOL::HandTrackingSample*, HOL::HandSide_MAX>& externalSamples)
 {
 	auto now = std::chrono::steady_clock::now();
-	this->mLeftHand.updateJointLocations(
-		space,
-		time,
-		bodyTracker,
-		getTriggerStabilizationSmoothingMS(HOL::LeftHand, now),
-		skeletalUpdate,
-		externalSamples[HOL::LeftHand]);
-	this->mRightHand.updateJointLocations(
-		space,
-		time,
-		bodyTracker,
-		getTriggerStabilizationSmoothingMS(HOL::RightHand, now),
-		skeletalUpdate,
-		externalSamples[HOL::RightHand]);
+	this->mLeftHand.updateJointLocations(space,
+										 time,
+										 bodyTracker,
+										 getTriggerStabilizationSmoothingMS(HOL::LeftHand, now),
+										 skeletalUpdate,
+										 externalSamples[HOL::LeftHand]);
+	this->mRightHand.updateJointLocations(space,
+										  time,
+										  bodyTracker,
+										  getTriggerStabilizationSmoothingMS(HOL::RightHand, now),
+										  skeletalUpdate,
+										  externalSamples[HOL::RightHand]);
 
 	if (!skeletalUpdate)
 	{
@@ -120,7 +130,16 @@ void HandTracking::updateHands(XrSpace space,
 	}
 
 	// Evaluate gestures
-	std::shared_ptr<const ActionSet> actionSet = this->mActionSet.load(std::memory_order_acquire);
+	// Native Steam Link hands expose their original pinch/point inputs instead of controller
+	// buttons, so they use a fixed action set rather than the configurable controller bindings.
+	const bool useSteamLinkNativeActions
+		= Config.handPose.controllerMode == ControllerMode::EmulateControllerMode
+		  && Config.handPose.emulatedControllerProfile
+				 == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative;
+	std::shared_ptr<const ActionSet> actionSet
+		= useSteamLinkNativeActions
+			  ? this->mSteamLinkNativeActionSet.load(std::memory_order_acquire)
+			  : this->mConfiguredActionSet.load(std::memory_order_acquire);
 	if (!actionSet)
 	{
 		return;
@@ -142,42 +161,50 @@ void HOL::OpenXR::HandTracking::updateTriggerStabilizationState(const ActionSet&
 		return;
 	}
 
-	for (size_t bindingIndex :
-		 actionSet.getBindingIndicesForTarget(settings::InputTarget::Trigger))
+	const settings::InputTarget triggerTargets[] = {
+		settings::InputTarget::Trigger,
+		settings::InputTarget::SteamLinkIndexPinch,
+	};
+	for (settings::InputTarget target : triggerTargets)
 	{
-		if (bindingIndex >= Config.input.gestureBindings.size()
-			|| bindingIndex >= actionSet.actionsByBindingIndex.size())
+		for (size_t bindingIndex : actionSet.getBindingIndicesForTarget(target))
 		{
-			continue;
-		}
+			if (bindingIndex >= actionSet.bindings.size()
+				|| bindingIndex >= actionSet.actionsByBindingIndex.size())
+			{
+				continue;
+			}
 
-		const auto& binding = Config.input.gestureBindings[bindingIndex];
-		const auto& action = actionSet.actionsByBindingIndex[bindingIndex];
-		if (!action)
-		{
-			continue;
-		}
+			const auto& binding = actionSet.bindings[bindingIndex];
+			const auto& action = actionSet.actionsByBindingIndex[bindingIndex];
+			if (!action)
+			{
+				continue;
+			}
 
-		if (binding.side >= 0 && binding.side < HOL::HandSide_MAX
-			&& action->getActionData().isDown)
-		{
-			this->mTriggerStabilizationHeld[binding.side] = true;
-		}
+			if (binding.side >= 0 && binding.side < HOL::HandSide_MAX
+				&& action->getActionData().isDown)
+			{
+				this->mTriggerStabilizationHeld[binding.side] = true;
+			}
 
-		if (!action->getActionData().onDown)
-		{
-			continue;
-		}
+			if (!action->getActionData().onDown)
+			{
+				continue;
+			}
 
-		if (binding.side >= 0 && binding.side < HOL::HandSide_MAX)
-		{
-			this->mLastTriggerStabilizationTime[binding.side] = std::chrono::steady_clock::now();
+			if (binding.side >= 0 && binding.side < HOL::HandSide_MAX)
+			{
+				this->mLastTriggerStabilizationTime[binding.side]
+					= std::chrono::steady_clock::now();
+			}
 		}
 	}
 }
 
 float HOL::OpenXR::HandTracking::getTriggerStabilizationSmoothingMS(
-	HOL::HandSide side, std::chrono::steady_clock::time_point now) const
+	HOL::HandSide side,
+	std::chrono::steady_clock::time_point now) const
 {
 	if (!Config.steamvr.triggerStabilization)
 	{
@@ -201,8 +228,7 @@ float HOL::OpenXR::HandTracking::getTriggerStabilizationSmoothingMS(
 		return 0.0f;
 	}
 
-	float elapsedMS
-		= std::chrono::duration<float, std::milli>(now - triggerTime).count();
+	float elapsedMS = std::chrono::duration<float, std::milli>(now - triggerTime).count();
 	if (elapsedMS >= falloffMS)
 	{
 		return 0.0f;
@@ -294,8 +320,7 @@ HOL::HandTransformPayload HandTracking::getTransformPayload(HOL::HandSide side)
 	payload.location = hand->handPose.palmLocation;
 	payload.velocity = hand->handPose.palmVelocity;
 
-	if (HOL::state::Runtime.trackingProvider
-		== HOL::state::TrackingProvider::SteamVRDriver)
+	if (HOL::state::Runtime.trackingProvider == HOL::state::TrackingProvider::SteamVRDriver)
 	{
 		mSteamVRTrackingSource.applySourcePose(side, payload);
 	}
@@ -347,7 +372,8 @@ void HOL::OpenXR::HandTracking::drawHands()
 
 	for (int i = 0; i < HandSide::HandSide_MAX; i++)
 	{
-		XrHandJointLocationEXT* jointLocations = this->getHand((HandSide)i)->getLastJointLocations();
+		XrHandJointLocationEXT* jointLocations
+			= this->getHand((HandSide)i)->getLastJointLocations();
 
 		for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++)
 		{

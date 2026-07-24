@@ -57,7 +57,17 @@ namespace
 
 	bool isAnalogTarget(InputTarget target)
 	{
-		return target == InputTarget::Grip || target == InputTarget::Trigger;
+		return target == InputTarget::Grip || target == InputTarget::Trigger
+			   || target == InputTarget::SteamLinkIndexPinch
+			   || target == InputTarget::SteamLinkMiddlePinch
+			   || target == InputTarget::SteamLinkRingPinch
+			   || target == InputTarget::SteamLinkPinkyPinch;
+	}
+
+	bool isSteamLinkPinchTarget(InputTarget target)
+	{
+		return target >= InputTarget::SteamLinkIndexPinch
+			   && target <= InputTarget::SteamLinkPinkyPinch;
 	}
 
 	bool isToggleTarget(InputTarget target)
@@ -67,8 +77,8 @@ namespace
 
 	bool isButtonTarget(InputTarget target)
 	{
-		return !isAnalogTarget(target) && !isToggleTarget(target)
-			   && target != InputTarget::Joystick && target != InputTarget::None;
+		return !isAnalogTarget(target) && !isToggleTarget(target) && target != InputTarget::Joystick
+			   && target != InputTarget::None;
 	}
 
 	const HOL::SteamVR::InputWrapper& targetToWrapper(InputTarget target)
@@ -93,6 +103,16 @@ namespace
 				return HOL::SteamVR::Input::Menu;
 			case InputTarget::Thumbrest:
 				return HOL::SteamVR::Input::Thumbrest;
+			case InputTarget::SteamLinkIndexPinch:
+				return HOL::SteamVR::Input::IndexPinch;
+			case InputTarget::SteamLinkMiddlePinch:
+				return HOL::SteamVR::Input::MiddlePinch;
+			case InputTarget::SteamLinkRingPinch:
+				return HOL::SteamVR::Input::RingPinch;
+			case InputTarget::SteamLinkPinkyPinch:
+				return HOL::SteamVR::Input::PinkyPinch;
+			case InputTarget::SteamLinkIndexPoint:
+				return HOL::SteamVR::Input::IndexPoint;
 			default:
 				break;
 		}
@@ -130,8 +150,8 @@ namespace
 		return modifierFingers;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildClosedHandModifier(
-		HandSide side, HOL::FingerType pinchFinger)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	buildClosedHandModifier(HandSide side, HOL::FingerType pinchFinger)
 	{
 		auto curlCombo = HOL::Gesture::ComboGesture::Gesture::Create();
 		curlCombo->parameters.holdUntilAllReleased = true;
@@ -180,8 +200,8 @@ namespace
 		return isButtonTarget(target) || target == InputTarget::Trigger;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> wrapWithHold(
-		const std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>& gesture)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	wrapWithHold(const std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>& gesture)
 	{
 		auto hold = HOL::Gesture::HoldGesture::Gesture::Create();
 		hold->parameters.duration = std::chrono::milliseconds(HOL::Config.input.holdDurationMS);
@@ -255,8 +275,8 @@ namespace
 		return modifierGesture;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildGatedModifierGesture(
-		const GestureBinding& binding)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	buildGatedModifierGesture(const GestureBinding& binding)
 	{
 		std::vector<std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>> modifiers;
 
@@ -306,9 +326,9 @@ namespace
 		return combo;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> applyModifiers(
-		const std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>& gesture,
-		const GestureBinding& binding)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	applyModifiers(const std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>& gesture,
+				   const GestureBinding& binding)
 	{
 		std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> wrappedGesture = gesture;
 
@@ -330,8 +350,8 @@ namespace
 		return wrappedGesture;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildChainGesture(
-		const GestureBinding& binding)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	buildChainGesture(const GestureBinding& binding)
 	{
 		auto chain = HOL::Gesture::ChainGesture::Gesture::Create();
 		chain->parameters.maxDelay
@@ -365,8 +385,8 @@ namespace
 		return true;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildOpenHandPinchGesture(
-		HandSide side, HOL::FingerType finger)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	buildOpenHandPinchGesture(HandSide side, HOL::FingerType finger)
 	{
 		auto pinch = HOL::Gesture::OpenHandPinchGesture::Gesture::Create();
 		pinch->parameters.pinchFinger = finger;
@@ -375,9 +395,20 @@ namespace
 		return pinch;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildProximityTriggerGesture(
-		const GestureBinding& binding)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	buildProximityTriggerGesture(const GestureBinding& binding)
 	{
+		if (isSteamLinkPinchTarget(binding.target))
+		{
+			auto proximity = HOL::Gesture::ProximityGesture::Create();
+			proximity->setup(binding.proximityFinger,
+							 binding.side,
+							 FingerThumb,
+							 binding.side,
+							 HOL::Config.input.pinchDistanceMM / 1000.0f);
+			return proximity;
+		}
+
 		if (usesModifier(binding, GestureModifier::ClosedHand)
 			&& binding.proximityFinger == HOL::FingerIndex)
 		{
@@ -436,8 +467,8 @@ namespace
 		return combo;
 	}
 
-	void addSinksForBinding(
-		const std::shared_ptr<HOL::BaseAction>& action, const GestureBinding& binding)
+	void addSinksForBinding(const std::shared_ptr<HOL::BaseAction>& action,
+							const GestureBinding& binding)
 	{
 		if (binding.target == InputTarget::Joystick)
 		{
@@ -465,6 +496,14 @@ namespace
 		{
 			const HOL::SteamVR::InputWrapper& wrapper = targetToWrapper(binding.target);
 
+			if (isSteamLinkPinchTarget(binding.target))
+			{
+				auto floatInput = HOL::SteamVRFloatInput::Create();
+				floatInput->setup(binding.side, wrapper.value());
+				action->addSink(InputType::Trigger, floatInput);
+				return;
+			}
+
 			auto boolInput = HOL::SteamVRBoolInput::Create();
 			boolInput->setup(binding.side, wrapper.click());
 			action->addSink(InputType::Button, boolInput);
@@ -476,6 +515,19 @@ namespace
 			// Keep driving the value sink from the binary path so button activation stays
 			// reliable across controller profiles.
 			action->addSink(InputType::Button, floatInput);
+			return;
+		}
+
+		if (binding.target == InputTarget::SteamLinkIndexPoint)
+		{
+			auto touchInput = HOL::SteamVRBoolInput::Create();
+			touchInput->setup(binding.side, HOL::SteamVR::Input::IndexPoint.touch());
+			action->addSink(InputType::Button, touchInput);
+
+			// Steam Link exposes Index Point as both a button and a trigger. Both are binary.
+			auto valueInput = HOL::SteamVRFloatInput::Create();
+			valueInput->setup(binding.side, HOL::SteamVR::Input::IndexPoint.value());
+			action->addSink(InputType::Button, valueInput);
 			return;
 		}
 
@@ -521,6 +573,8 @@ namespace HOL::GestureBindings
 				return "Grip";
 			case GestureKind::SystemAim:
 				return "System Gesture";
+			case GestureKind::IndexPoint:
+				return "Index Point";
 			default:
 				return "(none)";
 		}
@@ -536,7 +590,21 @@ namespace HOL::GestureBindings
 			}
 		}
 
-		return "(none)";
+		switch (target)
+		{
+			case InputTarget::SteamLinkIndexPinch:
+				return "Index Pinch";
+			case InputTarget::SteamLinkMiddlePinch:
+				return "Middle Pinch";
+			case InputTarget::SteamLinkRingPinch:
+				return "Ring Pinch";
+			case InputTarget::SteamLinkPinkyPinch:
+				return "Pinky Pinch";
+			case InputTarget::SteamLinkIndexPoint:
+				return "Index Point";
+			default:
+				return "(none)";
+		}
 	}
 
 	std::string describeChainSequence(const GestureBinding& binding)
@@ -596,6 +664,7 @@ namespace HOL::GestureBindings
 
 			case GestureKind::Grip:
 			case GestureKind::SystemAim:
+			case GestureKind::IndexPoint:
 				description = gestureKindName(binding.kind);
 				break;
 
@@ -612,16 +681,10 @@ namespace HOL::GestureBindings
 
 		appendModifierLabel(labels, binding, GestureModifier::ClosedHand, "Closed Hand");
 		appendModifierLabel(labels, binding, GestureModifier::Hold, "Hold");
-		appendModifierLabel(labels,
-							binding,
-							GestureModifier::LookingAtHand,
-							"Look At Hand",
-							"Not Look At Hand");
-		appendModifierLabel(labels,
-							binding,
-							GestureModifier::InFrontOfUser,
-							"In Front",
-							"Not In Front");
+		appendModifierLabel(
+			labels, binding, GestureModifier::LookingAtHand, "Look At Hand", "Not Look At Hand");
+		appendModifierLabel(
+			labels, binding, GestureModifier::InFrontOfUser, "In Front", "Not In Front");
 		appendModifierLabel(labels,
 							binding,
 							GestureModifier::PalmFacingUser,
@@ -666,11 +729,13 @@ namespace HOL::GestureBindings
 				return isButtonTarget(target) || isToggleTarget(target);
 
 			case GestureKind::Grip:
-				return isAnalogTarget(target) || isButtonTarget(target)
-					   || isToggleTarget(target);
+				return isAnalogTarget(target) || isButtonTarget(target) || isToggleTarget(target);
 
 			case GestureKind::SystemAim:
 				return target == InputTarget::System;
+
+			case GestureKind::IndexPoint:
+				return target == InputTarget::SteamLinkIndexPoint;
 
 			default:
 				return false;
@@ -700,9 +765,8 @@ namespace HOL::GestureBindings
 
 		if (!isGestureTargetCompatible(binding.kind, binding.target))
 		{
-			std::cerr << "GestureBindings: incompatible binding ("
-					  << gestureKindName(binding.kind) << " -> "
-					  << inputTargetName(binding.target) << ")\n";
+			std::cerr << "GestureBindings: incompatible binding (" << gestureKindName(binding.kind)
+					  << " -> " << inputTargetName(binding.target) << ")\n";
 			return nullptr;
 		}
 
@@ -722,9 +786,7 @@ namespace HOL::GestureBindings
 
 			auto holdGesture = HOL::Gesture::ProximityGesture::Create();
 			holdGesture->setup(
-				binding.proximityFinger,
-				binding.side,
-				HOL::Config.input.pinchDistanceMM / 1000.0f);
+				binding.proximityFinger, binding.side, HOL::Config.input.pinchDistanceMM / 1000.0f);
 			std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> finalHoldGesture = holdGesture;
 
 			std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> finalTriggerGesture
@@ -819,6 +881,32 @@ namespace HOL::GestureBindings
 				= buildSystemAimGesture(binding.side);
 			triggerGesture = applyModifiers(triggerGesture, binding);
 			action->setTriggerGesture(triggerGesture);
+		}
+		else if (binding.kind == GestureKind::IndexPoint)
+		{
+			auto indexCurl = HOL::Gesture::FingerCurlGesture::Gesture::Create();
+			indexCurl->parameters.finger = FingerIndex;
+			indexCurl->parameters.side = binding.side;
+			indexCurl->parameters.third = true;
+			indexCurl->parameters.maxDegrees = 5.0f;
+
+			auto extendedIndex = HOL::Gesture::InverseGesture::Gesture::Create();
+			extendedIndex->setGesture(indexCurl);
+			extendedIndex->setBinaryThreshold(1.0f);
+
+			auto point = HOL::Gesture::ComboGesture::Gesture::Create();
+			point->parameters.holdUntilAllReleased = false;
+			point->addGesture(extendedIndex);
+			for (HOL::FingerType finger : {FingerMiddle, FingerRing, FingerLittle})
+			{
+				auto curl = HOL::Gesture::FingerCurlGesture::Gesture::Create();
+				curl->parameters.finger = finger;
+				curl->parameters.side = binding.side;
+				point->addGesture(curl);
+			}
+
+			action = HOL::ButtonAction::Create();
+			action->setTriggerGesture(point);
 		}
 
 		if (action)

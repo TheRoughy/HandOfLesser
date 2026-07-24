@@ -14,7 +14,8 @@ namespace HOL
 	{
 		EmulatedControllerProfile_Index,
 		EmulatedControllerProfile_OculusTouch,
-		EmulatedControllerProfile_SteamLinkHand,
+		EmulatedControllerProfile_SteamLinkHandTouch,
+		EmulatedControllerProfile_SteamLinkHandNative,
 		EmulatedControllerProfile_MAX
 	};
 
@@ -24,14 +25,21 @@ namespace HOL
 		EmulatedControllerVariant_IndexFull,
 		EmulatedControllerVariant_OculusTouchPartial,
 		EmulatedControllerVariant_OculusTouchFull,
-		EmulatedControllerVariant_SteamLinkHandPartial,
-		EmulatedControllerVariant_SteamLinkHandFull,
+		EmulatedControllerVariant_SteamLinkHandTouchPartial,
+		EmulatedControllerVariant_SteamLinkHandTouchFull,
+		EmulatedControllerVariant_SteamLinkHandNative,
 		EmulatedControllerVariant_MAX
 	};
 
-	inline EmulatedControllerVariant getEmulatedControllerVariant(
-		EmulatedControllerProfile profile,
-		vr::EVRSkeletalTrackingLevel trackingLevel)
+	inline bool isSteamLinkHandProfile(EmulatedControllerProfile profile)
+	{
+		return profile == EmulatedControllerProfile_SteamLinkHandTouch
+			   || profile == EmulatedControllerProfile_SteamLinkHandNative;
+	}
+
+	inline EmulatedControllerVariant
+	getEmulatedControllerVariant(EmulatedControllerProfile profile,
+								 vr::EVRSkeletalTrackingLevel trackingLevel)
 	{
 		bool fullTracking = trackingLevel == vr::VRSkeletalTracking_Full;
 
@@ -40,10 +48,15 @@ namespace HOL
 			return fullTracking ? EmulatedControllerVariant_OculusTouchFull
 								: EmulatedControllerVariant_OculusTouchPartial;
 		}
-		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHand)
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch)
 		{
-			return fullTracking ? EmulatedControllerVariant_SteamLinkHandFull
-								: EmulatedControllerVariant_SteamLinkHandPartial;
+			return fullTracking ? EmulatedControllerVariant_SteamLinkHandTouchFull
+								: EmulatedControllerVariant_SteamLinkHandTouchPartial;
+		}
+		if (profile == EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandNative)
+		{
+			// Steam Link's native hand profile only advertises full skeletal tracking.
+			return EmulatedControllerVariant_SteamLinkHandNative;
 		}
 
 		return fullTracking ? EmulatedControllerVariant_IndexFull
@@ -86,9 +99,9 @@ namespace HOL
 
 	PoseLocationEuler getControllerBaseOffset();
 	PoseLocation getControllerPoseOffset(HandSide side,
-									 bool applyBaseOffset,
-									 Eigen::Vector3f userTranslationOffset,
-									 Eigen::Vector3f userRotationOffset);
+										 bool applyBaseOffset,
+										 Eigen::Vector3f userTranslationOffset,
+										 Eigen::Vector3f userRotationOffset);
 
 	PoseLocationEuler getControllerOffsetPreset(ControllerOffsetPreset type);
 
