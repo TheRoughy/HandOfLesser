@@ -4,11 +4,8 @@
 #include "XrUtils.h"
 #include <src/core/settings_global.h>
 
-void HOL::OpenXR::BodyTracking::init(xr::UniqueDynamicInstance& instance,
-									 xr::UniqueDynamicSession& session)
+void HOL::OpenXR::BodyTracking::init()
 {
-	this->mBodyTracker.init(session);
-
 	for (auto& location : this->mLastBodyTrackerLocations)
 	{
 		location.position = Eigen::Vector3f::Zero();
@@ -16,13 +13,20 @@ void HOL::OpenXR::BodyTracking::init(xr::UniqueDynamicInstance& instance,
 	}
 }
 
-void HOL::OpenXR::BodyTracking::updateBody(xr::UniqueDynamicSpace& space,
+void HOL::OpenXR::BodyTracking::initOpenXR(xr::UniqueDynamicSession& session)
+{
+	this->mBodyTracker.initOpenXR(session);
+}
+
+void HOL::OpenXR::BodyTracking::updateBody(XrSpace space,
 										   XrTime time,
 										   const HOL::PoseLocation* hmdPose,
 										   const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
-											   lastHandPoses)
+											   lastHandPoses,
+										   const HOL::BodyTrackingSample* externalSample)
 {
-	this->mBodyTracker.updateJointLocations(space, time, hmdPose, lastHandPoses);
+	this->mBodyTracker.updateJointLocations(
+		space, time, hmdPose, lastHandPoses, externalSample);
 }
 
 void HOL::OpenXR::BodyTracking::drawBody()

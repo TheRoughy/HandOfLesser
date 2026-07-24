@@ -58,12 +58,16 @@ void OpenXRHand::shutdown()
 	HandTrackingInterface::destroyHandTracker(this->mHandTracker);
 }
 
-void OpenXRHand::init(xr::UniqueDynamicSession& session, HOL::HandSide side)
+void OpenXRHand::init(HOL::HandSide side)
 {
 	this->mSide = side;
+}
+
+void OpenXRHand::initOpenXR(xr::UniqueDynamicSession& session)
+{
 	bool requestUnobstructedDataSource = HOL::state::Runtime.supportsHandTrackingDataSource;
 	HandTrackingInterface::createHandTracker(
-		session, toOpenXRHandSide(side), this->mHandTracker, requestUnobstructedDataSource);
+		session, toOpenXRHandSide(mSide), this->mHandTracker, requestUnobstructedDataSource);
 }
 
 XrHandJointLocationEXT* OpenXRHand::getLastJointLocations()
@@ -183,7 +187,7 @@ void OpenXRHand::calculateCurlSplay()
 	}
 }
 
-void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
+void OpenXRHand::updateJointLocations(XrSpace space,
 									  XrTime time,
 									  OpenXRBody& bodyTracker,
 									  float triggerStabilizationSmoothingMS,
@@ -207,6 +211,8 @@ void OpenXRHand::updateJointLocations(xr::UniqueDynamicSpace& space,
 	XrResult result = XR_SUCCESS;
 	if (externalSample != nullptr)
 	{
+		// External providers have already normalized their data to OpenXR joint structures. Copy it
+		// into the usual buffers so all correction, fallback, and filtering below remains shared.
 		std::copy(std::begin(externalSample->joints),
 				  std::end(externalSample->joints),
 				  std::begin(mJointLocations));

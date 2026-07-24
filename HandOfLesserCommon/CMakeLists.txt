@@ -8,7 +8,7 @@ add_library(HandOfLesserCommon STATIC
 	src/controller/controller.cpp
 	src/steamvr/input_wrapper.cpp
 	src/steamvr/skeletal_pose_utils.cpp
-	src/steamvr/steamvr_hand_tracking_source.cpp
+	src/steamvr/steamvr_tracking_source.cpp
 	src/settings/settings.cpp
 )
 

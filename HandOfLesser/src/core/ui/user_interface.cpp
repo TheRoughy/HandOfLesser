@@ -2076,11 +2076,42 @@ void HOL::UserInterface::buildMain()
 	ImGui::SameLine();
 	ImGui::Text("%s", HOL::state::Runtime.runtimeName);
 
+	ImGui::Text("Tracking source:");
+	ImGui::SameLine();
+	ImGui::Text(
+		"%s",
+		HOL::state::Runtime.trackingProvider == HOL::state::TrackingProvider::OpenXR
+			? "OpenXR"
+			: "SteamVR Driver");
+	ImGui::SameLine();
+	switch (HOL::state::Runtime.trackingProviderState)
+	{
+		case HOL::state::TrackingProviderState::Active:
+			ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "(Active)");
+			break;
+		case HOL::state::TrackingProviderState::Failed:
+			ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "(Failed)");
+			break;
+		case HOL::state::TrackingProviderState::Waiting:
+		default:
+			ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "(Waiting)");
+			break;
+	}
+
 	ImGui::Text("OpenXR Session state:");
 	ImGui::SameLine();
-	ImGui::TextColored(openXrStateColor,
-					   "%s",
-					   HOL::OpenXR::getOpenXrStateString(HOL::state::Runtime.openxrState));
+	if (HOL::state::Runtime.trackingProvider == HOL::state::TrackingProvider::OpenXR)
+	{
+		ImGui::TextColored(openXrStateColor,
+						   "%s",
+						   HOL::OpenXR::getOpenXrStateString(
+							   HOL::state::Runtime.openxrState));
+	}
+	else
+	{
+		ImGui::TextColored(
+			ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "Not started (alternate source)");
+	}
 
 	// Driver connection status
 	bool connected = HOL::HandOfLesserCore::Current->isDriverConnected();
@@ -2168,6 +2199,18 @@ void HOL::UserInterface::buildMain()
 	if (ImGui::IsItemHovered())
 	{
 		showWrappedTooltip("Restart to switch runtimes.");
+	}
+
+	if (ImGui::Checkbox("Force OpenXR tracking", &Config.openxr.forceOpenXRTracking))
+	{
+		HOL::HandOfLesserCore::Current->syncSettings();
+	}
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip(
+			"Use the selected OpenXR runtime even when an alternate tracking source is available. "
+			"SteamXR and VDXR have limitations but allow data to be retrived without OpenXR, which "
+			"is the default behavior. Only enable this for debugging.");
 	}
 
 	ImGui::SeparatorText("Runtime");

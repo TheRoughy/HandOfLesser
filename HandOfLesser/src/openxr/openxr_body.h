@@ -5,6 +5,7 @@
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr.hpp>
 #include <HandOfLesserCommon.h>
+#include "src/hand/body_tracking_sample.h"
 #include "src/hands/hand_pose.h"
 
 using namespace HOL;
@@ -13,12 +14,13 @@ class OpenXRBody
 {
 public:
 	~OpenXRBody();
-	void init(xr::UniqueDynamicSession& session);
-	void updateJointLocations(xr::UniqueDynamicSpace& space,
+	void initOpenXR(xr::UniqueDynamicSession& session);
+	void updateJointLocations(XrSpace space,
 								  XrTime time,
 								  const HOL::PoseLocation* hmdPose,
 								  const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
-									  lastHandPoses);
+									  lastHandPoses,
+								  const HOL::BodyTrackingSample* externalSample = nullptr);
 
 	XrBodyJointLocationFB* getLastJointLocations();
 	bool isAvailable() const;
@@ -63,6 +65,8 @@ private:
 	bool mWasHandTrackingTracked[2]{};
 
 	XrBodyTrackerFB mBodyTracker = nullptr;
+	// External body samples count as available even though no native tracker handle exists.
+	bool mUsingExternalBody = false;
 	XrPath mInputSourcePath;
 	XrBodyJointLocationFB mJointLocations[XR_BODY_JOINT_COUNT_FB]{};
 	XrBodyJointLocationFB mPreviousJointLocations[XR_BODY_JOINT_COUNT_FB]{};

@@ -16,7 +16,7 @@ public:
 								  XrHandTrackerEXT& handTrackerOut,
 								  bool requestUnobstructedDataSource = false);
 	static XrResult locateHandJoints(XrHandTrackerEXT& handTracker,
-									 xr::UniqueDynamicSpace& space,
+									 XrSpace space,
 									 XrTime time,
 									 XrHandJointLocationEXT* handJointLocationsOut,
 									 XrHandJointVelocityEXT* handJointVelocitiesOut,
@@ -30,7 +30,7 @@ public:
 								  XrBodyTrackerFB& bodyTrackerOut);
 	static void destroyBodyTracker(XrBodyTrackerFB& bodyTracker);
 	static XrResult locateBodyJoints(XrBodyTrackerFB& bodyTracker,
-									 xr::UniqueDynamicSpace& space,
+									 XrSpace space,
 									 XrTime time,
 									 XrBodyJointLocationFB* bodyJointLocationsOut,
 									 float& confidenceOut);

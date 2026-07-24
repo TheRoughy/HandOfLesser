@@ -302,6 +302,8 @@ namespace HOL
 		struct OpenXRSettings
 		{
 			std::string runtimeOverridePath;
+			// Bypass a runtime's alternate provider and create an OpenXR session directly.
+			bool forceOpenXRTracking = false;
 		};
 
 		struct SkeletalInput

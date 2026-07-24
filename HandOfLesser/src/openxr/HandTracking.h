@@ -20,17 +20,24 @@ namespace HOL::OpenXR
 	class HandTracking
 	{
 	public:
-		void init(xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session);
-		void updateHands(xr::UniqueDynamicSpace& space,
+		// Common processing and gestures exist even when no OpenXR instance is created.
+		void init();
+		// OpenXR tracker handles are initialized only for the direct OpenXR provider.
+		void initOpenXR(xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session);
+		void updateHands(XrSpace space,
 					 XrTime time,
 					 OpenXRBody& bodyTracker,
-					 const HOL::PoseLocation* hmdPose,
-					 bool skeletalUpdate);
+					 bool skeletalUpdate,
+					 const std::array<const HOL::HandTrackingSample*, HOL::HandSide_MAX>&
+						 externalSamples = {});
 		void updateInputs();
 		HOL::HandTransformPayload getTransformPayload(HOL::HandSide side);
 		HOL::HandPose& getHandPose(HOL::HandSide side);
 		void updateSteamVRHandBaseline(const HOL::SteamVRHandBaselinePayload& payload);
 		void updateSteamVRHandPose(const HOL::SteamVRHandPosePayload& payload);
+		void updateSteamVRHmdPose(const HOL::SteamVRHmdPosePayload& payload);
+		HOL::SteamVR::SteamVRTrackingSource& getSteamVRTrackingSource();
+		void resetSteamVRTrackingSource();
 		void drawHands();
 		OpenXRHand* getHand(HOL::HandSide side);
 
@@ -54,7 +61,7 @@ namespace HOL::OpenXR
 			}
 		};
 
-		void initHands(xr::UniqueDynamicSession& session);
+		void initOpenXRHands(xr::UniqueDynamicSession& session);
 		void submitLegacyFingerCurl();
 		void updateSimpleGestures();
 		void updateTriggerStabilizationState(const ActionSet& actionSet);
@@ -62,7 +69,7 @@ namespace HOL::OpenXR
 			HOL::HandSide side, std::chrono::steady_clock::time_point now) const;
 		OpenXRHand mLeftHand;
 		OpenXRHand mRightHand;
-		HOL::SteamVR::SteamVRHandTrackingSource mSteamVRHandTrackingSource;
+		HOL::SteamVR::SteamVRTrackingSource mSteamVRTrackingSource;
 
 		std::atomic<std::shared_ptr<const ActionSet>> mActionSet = std::make_shared<ActionSet>();
 		std::array<bool, HOL::HandSide_MAX> mTriggerStabilizationHeld = {false, false};

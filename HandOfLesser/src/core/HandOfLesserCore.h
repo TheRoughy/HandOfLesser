@@ -57,6 +57,8 @@ namespace HOL
 		SteamVR::SteamVRInput mSteamVRInput;
 		NamedPipeTransport mDriverTransport;
 		UdpTransport mOscTransport;
+		// Non-owning selected alternate provider; null means tracking is queried from OpenXR.
+		HOL::TrackingSource* mTrackingSource = nullptr;
 
 		std::thread mUserInterfaceThread;
 		std::thread mReceiveThread;
@@ -71,7 +73,7 @@ namespace HOL
 		void receiveDataThread();
 
 		void mainLoop();
-		void doOpenXRStuff(bool skeletalUpdate);
+		bool updateTracking(bool skeletalUpdate);
 		void sendOscData();
 		void sendUpdate(bool skeletalUpdate);
 		void sendBodyTrackerData();

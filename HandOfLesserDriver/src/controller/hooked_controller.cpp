@@ -379,7 +379,10 @@ namespace HOL
 			this->mHasHadValidOriginalPose = true;
 		}
 
-		if (firstValidPose || (HOL::HandOfLesser::Runtime.isSteamVR && validityChanged))
+		if (firstValidPose
+			|| (HOL::HandOfLesser::Runtime.trackingProvider
+					== HOL::state::TrackingProvider::SteamVRDriver
+				&& validityChanged))
 		{
 			HOL::HandOfLesser::Current->refreshPreferredHookedControllers();
 		}
@@ -528,6 +531,40 @@ namespace HOL
 		}
 
 		return updates;
+	}
+
+	std::optional<HOL::SteamVRHmdPosePayload>
+	HookedController::getForwardedHmdPoseUpdate(
+		ForwardedHmdPoseState& state,
+		bool enabled,
+		bool forceResync) const
+	{
+		const auto snapshot = mForwardedPose.load();
+		const bool active = enabled && snapshot && snapshot->valid;
+		// Transmission state belongs to the send thread, while this immutable snapshot is published
+		// by SteamVR's pose callback.
+		const bool changed = forceResync || !state.hasSentState || state.active != active
+			|| state.sourceDeviceId != mDeviceId
+			|| (active && state.poseGeneration != snapshot->generation);
+		if (!changed)
+		{
+			return std::nullopt;
+		}
+
+		SteamVRHmdPosePayload payload;
+		payload.active = active;
+		payload.sourceDeviceId = mDeviceId;
+		if (snapshot)
+		{
+			payload.poseGeneration = snapshot->generation;
+			payload.pose = snapshot->pose;
+		}
+
+		state.sourceDeviceId = payload.sourceDeviceId;
+		state.poseGeneration = payload.poseGeneration;
+		state.hasSentState = true;
+		state.active = payload.active;
+		return payload;
 	}
 
 	Eigen::Vector3f HookedController::getWorldPosition()

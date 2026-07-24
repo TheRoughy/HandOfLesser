@@ -279,9 +279,11 @@ namespace HOL
 
 					const bool steamVRRuntimeChanged
 						= Runtime.isSteamVR != payload.runtime.isSteamVR;
+					const bool trackingProviderChanged
+						= Runtime.trackingProvider != payload.runtime.trackingProvider;
 					Tracking = payload.tracking;
 					Runtime = payload.runtime;
-					if (steamVRRuntimeChanged)
+					if (steamVRRuntimeChanged || trackingProviderChanged)
 					{
 						refreshPreferredHookedControllers();
 						requestSteamVRHandTrackingResync();
@@ -1179,7 +1181,8 @@ namespace HOL
 
 		// Full skeletal tracking distinguishes native hand-tracking devices from normal controllers.
 		// Only SteamVR runtime sessions need their data forwarded back to the application.
-		auto bestController = Runtime.isSteamVR
+		auto bestController
+			= Runtime.trackingProvider == HOL::state::TrackingProvider::SteamVRDriver
 			? findBestHookedController(side, vr::VRSkeletalTracking_Full, "", true)
 			: nullptr;
 		auto previousController = mForwardedHandTrackingControllers[side].load();
@@ -1772,6 +1775,8 @@ namespace HOL
 		std::array<HookedController::ForwardedHandState, HandSide::HandSide_MAX>
 			forwardingStates{};
 		std::array<std::shared_ptr<HookedController>, HandSide::HandSide_MAX> sources{};
+		HookedController::ForwardedHmdPoseState hmdPoseState;
+		std::shared_ptr<HookedController> hmdSource;
 		auto nextWakeTime = (std::chrono::steady_clock::time_point::min)();
 		while (mActive.load())
 		{
@@ -1803,8 +1808,31 @@ namespace HOL
 			mSteamVRHandTrackingPending.exchange(false);
 			const bool forceResync = mSteamVRHandTrackingResync.exchange(false);
 			const auto now = std::chrono::steady_clock::now();
-			const auto hmd = getHMD();
-			const auto hmdPose = hmd ? hmd->getForwardedPose() : std::nullopt;
+			const bool forwardingEnabled
+				= Runtime.trackingProvider == HOL::state::TrackingProvider::SteamVRDriver;
+			const auto selectedHmd = getHMD();
+			// Keep the previous HMD alive long enough to publish one inactive update if SteamVR
+			// removes it. Otherwise the app would keep using its last valid pose indefinitely.
+			if (selectedHmd)
+			{
+				hmdSource = selectedHmd;
+			}
+			if (hmdSource)
+			{
+				const auto update = hmdSource->getForwardedHmdPoseUpdate(
+					hmdPoseState,
+					forwardingEnabled && selectedHmd == hmdSource,
+					forceResync);
+				if (update)
+				{
+					mTransport.sendPayload<NativePacketType::SteamVRHmdPose>(*update);
+				}
+				if (!selectedHmd && !hmdPoseState.active)
+				{
+					hmdSource.reset();
+					hmdPoseState = {};
+				}
+			}
 			nextWakeTime = (std::chrono::steady_clock::time_point::max)();
 			for (int sideIndex = 0; sideIndex < HandSide::HandSide_MAX; sideIndex++)
 			{
@@ -1822,29 +1850,19 @@ namespace HOL
 
 				auto updates = source->getForwardedHandUpdates(
 					forwardingStates[sideIndex],
-					Runtime.isSteamVR && selectedSource == source,
+					forwardingEnabled && selectedSource == source,
 					forceResync,
 					now);
 				nextWakeTime = (std::min)(nextWakeTime, updates.staleDeadline);
 
 				if (updates.baseline)
 				{
-					if (hmdPose)
-					{
-						updates.baseline->hasHmdPose = true;
-						updates.baseline->hmdPose = *hmdPose;
-					}
 					mTransport.sendPayload<NativePacketType::SteamVRHandBaseline>(
 						*updates.baseline);
 				}
 
 				if (updates.pose)
 				{
-					if (hmdPose)
-					{
-						updates.pose->hasHmdPose = true;
-						updates.pose->hmdPose = *hmdPose;
-					}
 					mTransport.sendPayload<NativePacketType::SteamVRHandPose>(*updates.pose);
 				}
 

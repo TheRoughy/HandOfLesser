@@ -113,7 +113,7 @@ void HandTrackingInterface::createHandTracker(xr::UniqueDynamicSession& session,
 }
 
 XrResult HandTrackingInterface::locateHandJoints(XrHandTrackerEXT& handTracker,
-												 xr::UniqueDynamicSpace& space,
+												 XrSpace space,
 												 XrTime time,
 												 XrHandJointLocationEXT* handJointLocationsOut,
 												 XrHandJointVelocityEXT* handJointVelocitiesOut,
@@ -148,7 +148,7 @@ XrResult HandTrackingInterface::locateHandJoints(XrHandTrackerEXT& handTracker,
 	locations.jointLocations = handJointLocationsOut;
 
 	XrHandJointsLocateInfoEXT locateInfo{XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT};
-	locateInfo.baseSpace = space.get();
+	locateInfo.baseSpace = space;
 	locateInfo.time = time;
 
 	XrResult result = xrLocateHandJointsEXT_(handTracker, &locateInfo, &locations);
@@ -207,7 +207,7 @@ void HandTrackingInterface::destroyBodyTracker(XrBodyTrackerFB& bodyTracker)
 }
 
 XrResult HandTrackingInterface::locateBodyJoints(XrBodyTrackerFB& bodyTracker,
-												 xr::UniqueDynamicSpace& space,
+												 XrSpace space,
 												 XrTime time,
 												 XrBodyJointLocationFB* bodyJointLocationsOut,
 												 float& confidenceOut)
@@ -220,7 +220,7 @@ XrResult HandTrackingInterface::locateBodyJoints(XrBodyTrackerFB& bodyTracker,
 	locations.jointLocations = bodyJointLocationsOut;
 
 	XrBodyJointsLocateInfoFB locateInfo{XR_TYPE_BODY_JOINTS_LOCATE_INFO_FB};
-	locateInfo.baseSpace = space.get();
+	locateInfo.baseSpace = space;
 	locateInfo.time = time;
 
 	XrResult result = xrLocateBodyJointsFB_(bodyTracker, &locateInfo, &locations);

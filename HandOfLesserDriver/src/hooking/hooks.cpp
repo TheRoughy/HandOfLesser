@@ -258,15 +258,19 @@ namespace HOL::hooks
 				const bool forwardedHandTrackingController
 					= HOL::HandOfLesser::Current->isForwardedHandTrackingController(
 						controller.get());
-				const bool forwardedTrackingReference
+				const bool forwardedHmdPose
 					= controller->mDeviceClass == vr::TrackedDeviceClass_HMD;
-				if ((HOL::HandOfLesser::Runtime.isSteamVR && forwardedHandTrackingController)
-					|| forwardedTrackingReference)
+				const bool forwardingSteamVRTracking
+					= HOL::HandOfLesser::Runtime.trackingProvider
+					  == HOL::state::TrackingProvider::SteamVRDriver;
+				if ((forwardingSteamVRTracking && forwardedHandTrackingController)
+					|| forwardedHmdPose)
 				{
-					// The HMD is also the reference for hand-pointer poses under Oculus and VDXR,
-					// so retain its latest valid pose under every runtime.
+					// HMD poses are always cached for hand-pointer generation. Wake the forwarding
+					// thread for them only when the app is using SteamVR as its tracking provider.
 					if (controller->cacheForwardedPose(newPose, newPoseValid)
-						&& forwardedHandTrackingController)
+						&& (forwardedHandTrackingController
+							|| (forwardedHmdPose && forwardingSteamVRTracking)))
 					{
 						HOL::HandOfLesser::Current->notifySteamVRHandTracking();
 					}
@@ -622,7 +626,8 @@ namespace HOL::hooks
 
 			if (controller != nullptr)
 			{
-				if (HandOfLesser::Runtime.isSteamVR
+				if (HandOfLesser::Runtime.trackingProvider
+						== HOL::state::TrackingProvider::SteamVRDriver
 					&& HandOfLesser::Current->isForwardedHandTrackingController(
 						controller.get()))
 				{

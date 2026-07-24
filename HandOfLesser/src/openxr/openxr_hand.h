@@ -15,9 +15,11 @@ class OpenXRHand
 {
 public:
 	~OpenXRHand();
-	void init(xr::UniqueDynamicSession& session, HOL::HandSide side);
+	// Side-dependent processing is source-independent; only the tracker handle requires OpenXR.
+	void init(HOL::HandSide side);
+	void initOpenXR(xr::UniqueDynamicSession& session);
 	void updateJointLocations(
-		xr::UniqueDynamicSpace& space,
+		XrSpace space,
 		XrTime time,
 		OpenXRBody& bodyTracker,
 		float triggerStabilizationSmoothingMS,

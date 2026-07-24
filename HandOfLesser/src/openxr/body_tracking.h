@@ -11,11 +11,15 @@ namespace HOL::OpenXR
 	class BodyTracking
 	{
 	public:
-		void init(xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session);
-		void updateBody(xr::UniqueDynamicSpace& space,
+		// Common caches are needed by both OpenXR and externally supplied body samples.
+		void init();
+		// The native body tracker is optional when another provider supplies normalized samples.
+		void initOpenXR(xr::UniqueDynamicSession& session);
+		void updateBody(XrSpace space,
 						XrTime time,
 						const HOL::PoseLocation* hmdPose,
-						const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses);
+						const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
+						const HOL::BodyTrackingSample* externalSample = nullptr);
 		void drawBody();
 		OpenXRBody& getBodyTracker();
 		HOL::MultimodalPosePayload getMultimodalPosePayload();

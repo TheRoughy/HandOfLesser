@@ -37,6 +37,15 @@ namespace HOL
 				= (std::chrono::steady_clock::time_point::max)();
 		};
 
+		// Records the HMD state already sent so unchanged high-frequency poses are skipped.
+		struct ForwardedHmdPoseState
+		{
+			uint32_t sourceDeviceId = vr::k_unTrackedDeviceIndexInvalid;
+			uint64_t poseGeneration = 0;
+			bool hasSentState = false;
+			bool active = false;
+		};
+
 		HookedController(uint32_t id,
 						 HandSide side,
 						 vr::IVRServerDriverHost* host,
@@ -79,6 +88,12 @@ namespace HOL
 			bool enabled,
 			bool forceResync,
 			std::chrono::steady_clock::time_point now) const;
+		// Returns a packet only when the HMD pose, source, or active state needs publishing.
+		std::optional<HOL::SteamVRHmdPosePayload>
+		getForwardedHmdPoseUpdate(
+			ForwardedHmdPoseState& state,
+			bool enabled,
+			bool forceResync) const;
 		bool isHeld();
 		Eigen::Vector3f getWorldPosition();
 

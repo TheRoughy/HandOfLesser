@@ -241,12 +241,15 @@ namespace HOL
 
 		inline void to_json(nlohmann::json& j, const OpenXRSettings& settings)
 		{
-			j = {{"runtimeOverridePath", settings.runtimeOverridePath}};
+			j = {{"runtimeOverridePath", settings.runtimeOverridePath},
+				 {"forceOpenXRTracking", settings.forceOpenXRTracking}};
 		}
 
 		inline void from_json(const nlohmann::json& j, OpenXRSettings& settings)
 		{
 			nlohmann::get_to_if_present(j, "runtimeOverridePath", settings.runtimeOverridePath);
+			nlohmann::get_to_if_present(
+				j, "forceOpenXRTracking", settings.forceOpenXRTracking);
 		}
 
 		inline void to_json(nlohmann::json& j, const SkeletalInput& settings)

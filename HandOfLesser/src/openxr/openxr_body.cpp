@@ -97,7 +97,7 @@ void OpenXRBody::shutdown()
 	HandTrackingInterface::destroyBodyTracker(this->mBodyTracker);
 }
 
-void OpenXRBody::init(xr::UniqueDynamicSession& session)
+void OpenXRBody::initOpenXR(xr::UniqueDynamicSession& session)
 {
 	if (!HOL::state::Runtime.supportsBodyTracking)
 	{
@@ -107,39 +107,55 @@ void OpenXRBody::init(xr::UniqueDynamicSession& session)
 	HandTrackingInterface::createBodyTracker(session, mBodyTracker);
 }
 
-void OpenXRBody::updateJointLocations(xr::UniqueDynamicSpace& space,
+void OpenXRBody::updateJointLocations(XrSpace space,
 								  XrTime time,
 								  const HOL::PoseLocation* hmdPose,
 								  const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
-									  lastHandPoses)
+									  lastHandPoses,
+								  const HOL::BodyTrackingSample* externalSample)
 {
 	std::copy(std::begin(mJointLocations),
 			  std::end(mJointLocations),
 			  std::begin(mPreviousJointLocations));
 
-	const bool usingSyntheticBody = mBodyTracker == nullptr;
+	// Prefer a supplied body snapshot, then a native tracker, and finally synthesize the small
+	// subset needed for torso-relative hand fallback and gestures.
+	mUsingExternalBody = externalSample != nullptr;
+	const bool usingSyntheticBody = mBodyTracker == nullptr && externalSample == nullptr;
 	if (usingSyntheticBody)
 	{
 		setFallbackJointLocations(hmdPose, lastHandPoses);
+	}
+	else if (externalSample != nullptr)
+	{
+		active = externalSample->active;
+		confidence = externalSample->confidence;
+		if (active)
+		{
+			std::copy(std::begin(externalSample->joints),
+					  std::end(externalSample->joints),
+					  std::begin(mJointLocations));
+		}
 	}
 	else
 	{
 		XrResult result = HandTrackingInterface::locateBodyJoints(
 			mBodyTracker, space, time, mJointLocations, confidence);
 		active = result == XR_SUCCESS && confidence > 0.0f;
-		if (!active)
-		{
-			confidence = 0.0f;
-			std::fill(std::begin(mJointLocations),
-					  std::end(mJointLocations),
-					  XrBodyJointLocationFB{});
-			std::fill(std::begin(mCorrectedJointLocations),
-					  std::end(mCorrectedJointLocations),
-					  XrBodyJointLocationFB{});
-			HOL::display::BodyTracking.headPoseValid = false;
-			HOL::display::BodyTracking.confidence = confidence;
-			return;
-		}
+	}
+
+	if (!usingSyntheticBody && !active)
+	{
+		confidence = 0.0f;
+		std::fill(std::begin(mJointLocations),
+				  std::end(mJointLocations),
+				  XrBodyJointLocationFB{});
+		std::fill(std::begin(mCorrectedJointLocations),
+				  std::end(mCorrectedJointLocations),
+				  XrBodyJointLocationFB{});
+		HOL::display::BodyTracking.headPoseValid = false;
+		HOL::display::BodyTracking.confidence = confidence;
+		return;
 	}
 
 	// Generate our own palm joints from body tracking.
@@ -224,7 +240,7 @@ XrBodyJointLocationFB* OpenXRBody::getLastJointLocations()
 
 bool OpenXRBody::isAvailable() const
 {
-	return mBodyTracker != nullptr;
+	return mBodyTracker != nullptr || mUsingExternalBody;
 }
 
 XrBodyTrackerFB OpenXRBody::getBodyTrackerFB()

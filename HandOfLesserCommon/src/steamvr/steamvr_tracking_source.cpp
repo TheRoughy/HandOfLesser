@@ -1,11 +1,13 @@
-#include "steamvr_hand_tracking_source.h"
+#include "steamvr_tracking_source.h"
 
 #include "src/controller/controller.h"
 #include "src/steamvr/skeletal_pose_utils.h"
 
+#include <chrono>
+
 namespace HOL::SteamVR
 {
-	void SteamVRHandTrackingSource::updateBaseline(const HOL::SteamVRHandBaselinePayload& payload)
+	void SteamVRTrackingSource::updateBaseline(const HOL::SteamVRHandBaselinePayload& payload)
 	{
 		if (payload.side < HOL::LeftHand || payload.side >= HOL::HandSide_MAX)
 		{
@@ -17,7 +19,7 @@ namespace HOL::SteamVR
 			std::make_shared<const HOL::SteamVRHandBaselinePayload>(payload));
 	}
 
-	void SteamVRHandTrackingSource::updatePose(const HOL::SteamVRHandPosePayload& payload)
+	void SteamVRTrackingSource::updatePose(const HOL::SteamVRHandPosePayload& payload)
 	{
 		if (payload.side < HOL::LeftHand || payload.side >= HOL::HandSide_MAX)
 		{
@@ -27,7 +29,12 @@ namespace HOL::SteamVR
 		mPoses[payload.side].store(std::make_shared<const HOL::SteamVRHandPosePayload>(payload));
 	}
 
-	void SteamVRHandTrackingSource::setInactive(SideState& state)
+	void SteamVRTrackingSource::updateHmdPose(const HOL::SteamVRHmdPosePayload& payload)
+	{
+		mHmdPose.store(std::make_shared<const HOL::SteamVRHmdPosePayload>(payload));
+	}
+
+	void SteamVRTrackingSource::setInactive(SideState& state)
 	{
 		// Publish the active-to-inactive transition once without manufacturing updates every frame.
 		const bool changed = state.sample.active || state.hasSourcePose;
@@ -42,10 +49,7 @@ namespace HOL::SteamVR
 	}
 
 	const HOL::HandTrackingSample*
-	SteamVRHandTrackingSource::getSample(HOL::HandSide side,
-										 const HOL::PoseLocation* openXRHmdPose,
-										 bool applyBaseOffset,
-										 bool skeletalUpdate)
+	SteamVRTrackingSource::getSample(HOL::HandSide side, bool applyBaseOffset, bool skeletalUpdate)
 	{
 		if (side < HOL::LeftHand || side >= HOL::HandSide_MAX)
 		{
@@ -73,14 +77,12 @@ namespace HOL::SteamVR
 		state.applyBaseOffset = applyBaseOffset;
 		if (sourceChanged)
 		{
-			state.hasStageFromSteamVR = false;
 			state.hasRelativeJoints = false;
 		}
 
 		if (!baseline->active)
 		{
 			state.hasRelativeJoints = false;
-			state.hasStageFromSteamVR = false;
 			setInactive(state);
 			return &state.sample;
 		}
@@ -95,7 +97,6 @@ namespace HOL::SteamVR
 
 		// The baseline carries a usable pose, but prefer a newer delta from the same source.
 		const vr::DriverPose_t* controllerPose = &baseline->pose;
-		const vr::DriverPose_t* hmdPose = baseline->hasHmdPose ? &baseline->hmdPose : nullptr;
 		uint64_t poseGeneration = baseline->poseGeneration;
 		const auto pose = mPoses[side].load();
 		if (pose && pose->active && pose->sourceDeviceId == baseline->sourceDeviceId
@@ -103,34 +104,11 @@ namespace HOL::SteamVR
 		{
 			controllerPose = &pose->pose;
 			poseGeneration = pose->poseGeneration;
-			if (pose->hasHmdPose)
-			{
-				hmdPose = &pose->hmdPose;
-			}
-		}
-
-		if (hmdPose == nullptr || openXRHmdPose == nullptr)
-		{
-			state.hasStageFromSteamVR = false;
-			setInactive(state);
-			return &state.sample;
-		}
-
-		if (!state.hasStageFromSteamVR)
-		{
-			// SteamVR driver space and OpenXR stage space may have different origins. Their HMD
-			// poses describe the same physical point, so they provide the transform between them.
-			const HOL::PoseLocation steamVRHmdPose = getSteamVRDevicePose(*hmdPose);
-			state.stageFromSteamVR.orientation
-				= openXRHmdPose->orientation * steamVRHmdPose.orientation.inverse();
-			state.stageFromSteamVR.position
-				= openXRHmdPose->position
-				  - state.stageFromSteamVR.orientation * steamVRHmdPose.position;
-			state.hasStageFromSteamVR = true;
 		}
 
 		const bool poseChanged = !state.hasSourcePose || state.poseGeneration != poseGeneration;
-		const bool sampleChanged = sourceChanged || activeChanged || poseChanged || offsetChanged;
+		const bool sampleChanged = sourceChanged || activeChanged || poseChanged || offsetChanged
+								   || (skeletalUpdate && skeletonChanged);
 		if (!sampleChanged && !skeletalUpdate)
 		{
 			return &state.sample;
@@ -147,10 +125,7 @@ namespace HOL::SteamVR
 		steamVRPalmPose.position = steamVRControllerPose.position
 								   - steamVRPalmPose.orientation * controllerOffset.position;
 
-		HOL::PoseLocation palmPose;
-		palmPose.position = state.stageFromSteamVR.position
-							+ state.stageFromSteamVR.orientation * steamVRPalmPose.position;
-		palmPose.orientation = state.stageFromSteamVR.orientation * steamVRPalmPose.orientation;
+		const HOL::PoseLocation palmPose = steamVRPalmPose;
 
 		if (sourceChanged || activeChanged)
 		{
@@ -169,39 +144,34 @@ namespace HOL::SteamVR
 			{
 				auto& location = state.sample.joints[i];
 				location.locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT
-									 | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
-									 | XR_SPACE_LOCATION_POSITION_TRACKED_BIT
-									 | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+										 | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
+										 | XR_SPACE_LOCATION_POSITION_TRACKED_BIT
+										 | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 				location.pose.position = {jointPoses[i].position.x(),
-									  jointPoses[i].position.y(),
-									  jointPoses[i].position.z()};
+										  jointPoses[i].position.y(),
+										  jointPoses[i].position.z()};
 				location.pose.orientation = {jointPoses[i].orientation.x(),
-										 jointPoses[i].orientation.y(),
-										 jointPoses[i].orientation.z(),
-										 jointPoses[i].orientation.w()};
+											 jointPoses[i].orientation.y(),
+											 jointPoses[i].orientation.z(),
+											 jointPoses[i].orientation.w()};
 			}
 		}
 
 		// Pose-only updates keep the cached finger joints but move the palm immediately.
 		auto& palmLocation = state.sample.joints[XR_HAND_JOINT_PALM_EXT];
-		palmLocation.locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT
-								   | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
-								   | XR_SPACE_LOCATION_POSITION_TRACKED_BIT
-								   | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+		palmLocation.locationFlags
+			= XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
+			  | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 		palmLocation.pose.position
 			= {palmPose.position.x(), palmPose.position.y(), palmPose.position.z()};
 		palmLocation.pose.orientation = {palmPose.orientation.x(),
-									 palmPose.orientation.y(),
-									 palmPose.orientation.z(),
-									 palmPose.orientation.w()};
+										 palmPose.orientation.y(),
+										 palmPose.orientation.z(),
+										 palmPose.orientation.w()};
 
 		// Only palm velocity is consumed downstream; finger motion remains relative to the palm.
 		HOL::PoseVelocity palmVelocity
 			= getSteamVRVelocityAtPosition(*controllerPose, steamVRPalmPose.position);
-		palmVelocity.linearVelocity
-			= state.stageFromSteamVR.orientation * palmVelocity.linearVelocity;
-		palmVelocity.angularVelocity
-			= state.stageFromSteamVR.orientation * palmVelocity.angularVelocity;
 		auto& velocity = state.sample.velocities[XR_HAND_JOINT_PALM_EXT];
 		velocity.velocityFlags
 			= XR_SPACE_VELOCITY_LINEAR_VALID_BIT | XR_SPACE_VELOCITY_ANGULAR_VALID_BIT;
@@ -223,8 +193,36 @@ namespace HOL::SteamVR
 		return &state.sample;
 	}
 
-	void SteamVRHandTrackingSource::applySourcePose(HOL::HandSide side,
-													HOL::HandTransformPayload& payload) const
+	HOL::TrackingSourceFrame SteamVRTrackingSource::update(bool skeletalUpdate,
+														   bool applyBaseOffset)
+	{
+		if (mResetRequested.exchange(false))
+		{
+			mStates = {};
+		}
+
+		HOL::TrackingSourceFrame frame;
+		// Only elapsed time is consumed downstream, so this does not need the OpenXR runtime's epoch.
+		frame.time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+						 std::chrono::steady_clock::now().time_since_epoch())
+						 .count();
+
+		const auto hmdPose = mHmdPose.load();
+		if (hmdPose && hmdPose->active)
+		{
+			frame.hmdPose = getSteamVRDevicePose(hmdPose->pose);
+		}
+
+		for (int side = 0; side < HOL::HandSide_MAX; side++)
+		{
+			frame.hands[side]
+				= getSample(static_cast<HOL::HandSide>(side), applyBaseOffset, skeletalUpdate);
+		}
+		return frame;
+	}
+
+	void SteamVRTrackingSource::applySourcePose(HOL::HandSide side,
+												HOL::HandTransformPayload& payload) const
 	{
 		if (side < HOL::LeftHand || side >= HOL::HandSide_MAX)
 		{
@@ -232,20 +230,34 @@ namespace HOL::SteamVR
 		}
 
 		const auto& state = mStates[side];
-		if (!state.hasSourcePose || !state.hasStageFromSteamVR)
+		if (!state.hasSourcePose)
 		{
 			return;
 		}
 
 		// Keep the native pose as an output template so the driver retains its prediction and
-		// coordinate metadata. Convert the processed palm back out of OpenXR stage space first.
+		// coordinate metadata. Processed poses already use the same SteamVR world space.
 		payload.hasSteamVRSourcePose = true;
 		payload.steamVRSourcePose = state.sourcePose;
-		const Eigen::Quaternionf steamVRFromStage = state.stageFromSteamVR.orientation.inverse();
-		payload.location.position
-			= steamVRFromStage * (payload.location.position - state.stageFromSteamVR.position);
-		payload.location.orientation = steamVRFromStage * payload.location.orientation;
-		payload.velocity.linearVelocity = steamVRFromStage * payload.velocity.linearVelocity;
-		payload.velocity.angularVelocity = steamVRFromStage * payload.velocity.angularVelocity;
+	}
+
+	bool SteamVRTrackingSource::hasTrackingReference() const
+	{
+		const auto hmdPose = mHmdPose.load();
+		return hmdPose && hmdPose->active;
+	}
+
+	void SteamVRTrackingSource::reset()
+	{
+		for (auto& baseline : mBaselines)
+		{
+			baseline.store(nullptr);
+		}
+		for (auto& pose : mPoses)
+		{
+			pose.store(nullptr);
+		}
+		mHmdPose.store(nullptr);
+		mResetRequested.store(true);
 	}
 } // namespace HOL::SteamVR

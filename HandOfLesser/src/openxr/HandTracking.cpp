@@ -16,17 +16,26 @@ using namespace HOL;
 using namespace HOL::OpenXR;
 using namespace std::chrono_literals;
 
-void HandTracking::init(xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session)
+void HandTracking::init()
 {
-	HandTrackingInterface::init(instance);
-	this->initHands(session);
+	this->mLeftHand.init(HOL::LeftHand);
+	this->mRightHand.init(HOL::RightHand);
 	rebuildActions();
 }
 
-void HandTracking::initHands(xr::UniqueDynamicSession& session)
+void HandTracking::initOpenXR(
+	xr::UniqueDynamicInstance& instance, xr::UniqueDynamicSession& session)
 {
-	this->mLeftHand.init(session, HOL::LeftHand);
-	this->mRightHand.init(session, HOL::RightHand);
+	HandTrackingInterface::init(instance);
+	this->initOpenXRHands(session);
+	// Runtime extension support is known only after the OpenXR instance has been created.
+	rebuildActions();
+}
+
+void HandTracking::initOpenXRHands(xr::UniqueDynamicSession& session)
+{
+	this->mLeftHand.initOpenXR(session);
+	this->mRightHand.initOpenXR(session);
 }
 
 void HOL::OpenXR::HandTracking::rebuildActions()
@@ -68,38 +77,28 @@ std::shared_ptr<BaseAction> HOL::OpenXR::HandTracking::getActionForBindingIndex(
 	return actionSet->actionsByBindingIndex[bindingIndex];
 }
 
-void HandTracking::updateHands(xr::UniqueDynamicSpace& space,
+void HandTracking::updateHands(XrSpace space,
 						   XrTime time,
 						   OpenXRBody& bodyTracker,
-						   const HOL::PoseLocation* hmdPose,
-						   bool skeletalUpdate)
+						   bool skeletalUpdate,
+						   const std::array<
+							   const HOL::HandTrackingSample*, HOL::HandSide_MAX>& externalSamples)
 {
 	auto now = std::chrono::steady_clock::now();
-	const HOL::HandTrackingSample* leftSample = nullptr;
-	const HOL::HandTrackingSample* rightSample = nullptr;
-	if (HOL::state::Runtime.isSteamVR)
-	{
-		// Querying OpenXR here would feed our emulated hands back into themselves. Reconstruct the
-		// hand from full-skeleton controllers observed by the driver instead.
-		leftSample = mSteamVRHandTrackingSource.getSample(
-			HOL::LeftHand, hmdPose, Config.handPose.applyBaseOffset, skeletalUpdate);
-		rightSample = mSteamVRHandTrackingSource.getSample(
-			HOL::RightHand, hmdPose, Config.handPose.applyBaseOffset, skeletalUpdate);
-	}
 	this->mLeftHand.updateJointLocations(
 		space,
 		time,
 		bodyTracker,
 		getTriggerStabilizationSmoothingMS(HOL::LeftHand, now),
 		skeletalUpdate,
-		leftSample);
+		externalSamples[HOL::LeftHand]);
 	this->mRightHand.updateJointLocations(
 		space,
 		time,
 		bodyTracker,
 		getTriggerStabilizationSmoothingMS(HOL::RightHand, now),
 		skeletalUpdate,
-		rightSample);
+		externalSamples[HOL::RightHand]);
 
 	if (!skeletalUpdate)
 	{
@@ -295,9 +294,10 @@ HOL::HandTransformPayload HandTracking::getTransformPayload(HOL::HandSide side)
 	payload.location = hand->handPose.palmLocation;
 	payload.velocity = hand->handPose.palmVelocity;
 
-	if (HOL::state::Runtime.isSteamVR)
+	if (HOL::state::Runtime.trackingProvider
+		== HOL::state::TrackingProvider::SteamVRDriver)
 	{
-		mSteamVRHandTrackingSource.applySourcePose(side, payload);
+		mSteamVRTrackingSource.applySourcePose(side, payload);
 	}
 
 	return payload;
@@ -311,12 +311,27 @@ HOL::HandPose& HandTracking::getHandPose(HOL::HandSide side)
 
 void HandTracking::updateSteamVRHandBaseline(const HOL::SteamVRHandBaselinePayload& payload)
 {
-	mSteamVRHandTrackingSource.updateBaseline(payload);
+	mSteamVRTrackingSource.updateBaseline(payload);
 }
 
 void HandTracking::updateSteamVRHandPose(const HOL::SteamVRHandPosePayload& payload)
 {
-	mSteamVRHandTrackingSource.updatePose(payload);
+	mSteamVRTrackingSource.updatePose(payload);
+}
+
+void HandTracking::updateSteamVRHmdPose(const HOL::SteamVRHmdPosePayload& payload)
+{
+	mSteamVRTrackingSource.updateHmdPose(payload);
+}
+
+HOL::SteamVR::SteamVRTrackingSource& HandTracking::getSteamVRTrackingSource()
+{
+	return mSteamVRTrackingSource;
+}
+
+void HandTracking::resetSteamVRTrackingSource()
+{
+	mSteamVRTrackingSource.reset();
 }
 
 void HOL::OpenXR::HandTracking::drawHands()

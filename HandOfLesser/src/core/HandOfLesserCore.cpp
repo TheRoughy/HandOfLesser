@@ -74,6 +74,8 @@ void HandOfLesserCore::init(int serverPort)
 	runtimeState.supportsBodyTracking = false;
 	runtimeState.supportsHandTrackingAim = false;
 	runtimeState.supportsHandTrackingDataSource = false;
+	runtimeState.trackingProvider = state::TrackingProvider::OpenXR;
+	runtimeState.trackingProviderState = state::TrackingProviderState::Waiting;
 	runtimeState.openxrState = HOL::OpenXR::OpenXrState::Uninitialized;
 	trackingState.isMultimodalEnabled = false;
 	trackingState.isHighFidelityEnabled = false;
@@ -107,36 +109,50 @@ void HandOfLesserCore::init(int serverPort)
 	Config.steamvr.poseSmoothing = runtimeState.isOVR ? Config.steamvr.oculusPoseSmoothing
 											 : Config.steamvr.standardPoseSmoothing;
 
-	this->mInstanceHolder.init();
-	runtimeState.openxrState = this->mInstanceHolder.getState();
+	// The processors and gesture graph are source-independent. OpenXR handles are created below
+	// only when OpenXR is selected as the provider.
+	this->mHandTracking.init();
+	this->mBodyTracking.init();
 
-	if (this->mInstanceHolder.getState() != OpenXrState::Failed)
+	if (runtimeState.isSteamVR && !Config.openxr.forceOpenXRTracking)
 	{
-		this->mInstanceHolder.beginSession();
+		runtimeState.trackingProvider = state::TrackingProvider::SteamVRDriver;
+		this->mTrackingSource = &this->mHandTracking.getSteamVRTrackingSource();
+		std::cout << "Using SteamVR driver tracking; OpenXR will not be started." << std::endl;
+	}
+	else
+	{
+		this->mInstanceHolder.init();
+		runtimeState.openxrState = this->mInstanceHolder.getState();
 
-		// Run everything else even if we don't have valid OpenXR so we
-		// can test UI and stuff
-		if (this->mInstanceHolder.getState() == OpenXrState::Running)
+		if (this->mInstanceHolder.getState() != OpenXrState::Failed)
 		{
-			this->mHandTracking.init(this->mInstanceHolder.mInstance,
-									 this->mInstanceHolder.mSession);
+			this->mInstanceHolder.beginSession();
 
-			this->mBodyTracking.init(this->mInstanceHolder.mInstance,
-									 this->mInstanceHolder.mSession);
-
-			// Airlink doesn't support headless and requires hax
-			// As of writing, the only other supported runtime is VDXR
-			if (this->mInstanceHolder.fullForegroundMode())
+			if (this->mInstanceHolder.getState() == OpenXrState::Running)
 			{
-				std::cout << "Running in full foreground mode for testing only!" << std::endl;
-			}
+				this->mHandTracking.initOpenXR(
+					this->mInstanceHolder.mInstance, this->mInstanceHolder.mSession);
+				this->mBodyTracking.initOpenXR(this->mInstanceHolder.mSession);
+				runtimeState.trackingProviderState = state::TrackingProviderState::Active;
 
-			if (runtimeState.isOVR)
-			{
-				// Hacks to make OVR actually work
-				HOL::hacks::fixOvrSessionStateRestriction();
-				HOL::hacks::fixOvrMultimodalSupportCheck();
+				// Airlink doesn't support headless and requires hax.
+				if (this->mInstanceHolder.fullForegroundMode())
+				{
+					std::cout << "Running in full foreground mode for testing only!" << std::endl;
+				}
+
+				if (runtimeState.isOVR)
+				{
+					HOL::hacks::fixOvrSessionStateRestriction();
+					HOL::hacks::fixOvrMultimodalSupportCheck();
+				}
 			}
+		}
+
+		if (this->mInstanceHolder.getState() == OpenXrState::Failed)
+		{
+			runtimeState.trackingProviderState = state::TrackingProviderState::Failed;
 		}
 	}
 
@@ -216,7 +232,7 @@ void HOL::HandOfLesserCore::userInterfaceLoop()
 
 	while (1)
 	{
-		if (this->mInstanceHolder.getState() == OpenXrState::Running)
+		if (state::Runtime.trackingProviderState == state::TrackingProviderState::Active)
 		{
 			this->mHandTracking.drawHands();
 			this->mBodyTracking.drawBody();
@@ -264,6 +280,7 @@ void HOL::HandOfLesserCore::receiveDataThread()
 			{
 				std::cout << "Driver disconnected, attempting to reconnect..." << std::endl;
 				printedReconnecting = true;
+				this->mHandTracking.resetSteamVRTrackingSource();
 			}
 
 			wasConnected = false;
@@ -445,6 +462,15 @@ void HOL::HandOfLesserCore::receiveDataThread()
 				break;
 			}
 
+			case NativePacketType::SteamVRHmdPose: {
+				SteamVRHmdPosePayload payload;
+				if (nativePacket.copyPayload(payload))
+				{
+					mHandTracking.updateSteamVRHmdPose(payload);
+				}
+				break;
+			}
+
 			case NativePacketType::AppShutdownRequested: {
 				if (nativePacket.payloadSize != 0)
 				{
@@ -489,15 +515,12 @@ void HandOfLesserCore::mainLoop()
 			break;
 		}
 
-		if (this->mInstanceHolder.getState() == OpenXrState::Running)
+		const bool trackingUpdated = updateTracking(skeletalUpdate);
+		if (trackingUpdated && skeletalUpdate)
 		{
-			doOpenXRStuff(skeletalUpdate);
-			if (skeletalUpdate)
-			{
-				sendOscData();
-			}
+			sendOscData();
 		}
-		else
+		else if (!trackingUpdated)
 		{
 			if (skeletalUpdate && Config.vrchat.sendDebugOsc)
 			{
@@ -517,7 +540,10 @@ void HandOfLesserCore::mainLoop()
 	std::cout << "Exiting loop" << std::endl;
 
 	// Shut it down!
-	this->mInstanceHolder.endSession();
+	if (state::Runtime.trackingProvider == state::TrackingProvider::OpenXR)
+	{
+		this->mInstanceHolder.endSession();
+	}
 
 	// Signal threads to stop
 	this->mActive.store(false);
@@ -534,24 +560,61 @@ void HandOfLesserCore::mainLoop()
 	}
 }
 
-void HandOfLesserCore::doOpenXRStuff(bool skeletalUpdate)
+bool HandOfLesserCore::updateTracking(bool skeletalUpdate)
 {
-	XrTime time = this->mInstanceHolder.getTime();
-	time += 1000000LL * (XrTime)Config.general.motionPredictionMS;
+	XrTime time = 0;
+	XrSpace space = XR_NULL_HANDLE;
+	std::optional<HOL::PoseLocation> hmdPose;
+	std::array<const HOL::HandTrackingSample*, HOL::HandSide_MAX> handSamples{};
+	const HOL::BodyTrackingSample* bodySample = nullptr;
+	const bool usingOpenXR
+		= state::Runtime.trackingProvider == state::TrackingProvider::OpenXR;
 
-	this->mInstanceHolder.pollEvent();
-
-	if (this->mInstanceHolder.fullForegroundMode())
+	if (usingOpenXR)
 	{
-		this->mInstanceHolder.foregroundRender();
+		if (this->mInstanceHolder.getState() != OpenXrState::Running)
+		{
+			return false;
+		}
+
+		time = this->mInstanceHolder.getTime();
+		time += 1000000LL * static_cast<XrTime>(Config.general.motionPredictionMS);
+		space = this->mInstanceHolder.mStageSpace.get();
+		this->mInstanceHolder.pollEvent();
+		if (this->mInstanceHolder.fullForegroundMode())
+		{
+			this->mInstanceHolder.foregroundRender();
+		}
+
+		if (skeletalUpdate)
+		{
+			HOL::PoseLocation pose;
+			if (this->mInstanceHolder.getHmdPose(space, time, pose))
+			{
+				hmdPose = pose;
+			}
+		}
 	}
-
-	HOL::PoseLocation hmdPose;
-	bool hmdPoseValid = false;
-	if (skeletalUpdate || HOL::state::Runtime.isSteamVR)
+	else
 	{
-		hmdPoseValid = this->mInstanceHolder.getHmdPose(
-			this->mInstanceHolder.mStageSpace.get(), time, hmdPose);
+		// Alternate providers return the same sample shape as OpenXR, so the rest of this function
+		// can run without source-specific branches.
+		const HOL::TrackingSourceFrame frame
+			= mTrackingSource->update(skeletalUpdate, Config.handPose.applyBaseOffset);
+		time = frame.time;
+		hmdPose = frame.hmdPose;
+		handSamples = frame.hands;
+		bodySample = frame.body;
+
+		// The HMD reference is required by synthetic body tracking and spatial gestures.
+		const auto providerState = mTrackingSource->hasTrackingReference()
+			? state::TrackingProviderState::Active
+			: state::TrackingProviderState::Waiting;
+		if (state::Runtime.trackingProviderState != providerState)
+		{
+			state::Runtime.trackingProviderState = providerState;
+			syncState();
+		}
 	}
 
 	if (skeletalUpdate)
@@ -561,29 +624,32 @@ void HandOfLesserCore::doOpenXRStuff(bool skeletalUpdate)
 			&this->mHandTracking.getHandPose(HOL::HandSide::RightHand),
 		};
 		this->mBodyTracking.updateBody(
-			this->mInstanceHolder.mStageSpace,
+			space,
 			time,
-			hmdPoseValid ? &hmdPose : nullptr,
-			lastHandPoses);
+			hmdPose ? &*hmdPose : nullptr,
+			lastHandPoses,
+			bodySample);
 	}
 	this->mHandTracking.updateHands(
-		this->mInstanceHolder.mStageSpace,
+		space,
 		time,
 		this->mBodyTracking.getBodyTracker(),
-		hmdPoseValid ? &hmdPose : nullptr,
-		skeletalUpdate);
+		skeletalUpdate,
+		handSamples);
 
 	if (skeletalUpdate)
 	{
 		this->mHandTracking.updateInputs();
 
-		// Periodic check for tracking features
-		this->featuresManager.performPeriodicCheck();
+		if (usingOpenXR)
+		{
+			this->featuresManager.performPeriodicCheck();
+		}
 	}
 
 	this->sendUpdate(skeletalUpdate);
 
-	return;
+	return true;
 }
 
 void HOL::HandOfLesserCore::sendOscData()
@@ -758,7 +824,28 @@ void HOL::HandOfLesserCore::flushSettings(bool force)
 
 void HOL::HandOfLesserCore::syncState()
 {
-	state::Runtime.openxrState = this->mInstanceHolder.getState();
+	if (state::Runtime.trackingProvider == state::TrackingProvider::OpenXR)
+	{
+		state::Runtime.openxrState = this->mInstanceHolder.getState();
+		switch (state::Runtime.openxrState)
+		{
+			case OpenXrState::Running:
+				state::Runtime.trackingProviderState
+					= state::TrackingProviderState::Active;
+				break;
+			case OpenXrState::Failed:
+			case OpenXrState::Exited:
+				state::Runtime.trackingProviderState
+					= state::TrackingProviderState::Failed;
+				break;
+			case OpenXrState::Uninitialized:
+			case OpenXrState::Initialized:
+			default:
+				state::Runtime.trackingProviderState
+					= state::TrackingProviderState::Waiting;
+				break;
+		}
+	}
 
 	HOL::StatePayload payload;
 	payload.tracking = state::Tracking;

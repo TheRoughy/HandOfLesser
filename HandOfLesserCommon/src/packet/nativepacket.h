@@ -31,6 +31,7 @@ namespace HOL
 		DeviceInputInfo,
 		SteamVRHandBaseline,
 		SteamVRHandPose,
+		SteamVRHmdPose,
 		AppInitialized,
 		AppShutdownRequested,
 		InvalidPacket
@@ -95,8 +96,6 @@ namespace HOL
 		uint64_t poseGeneration = 0;
 		uint64_t skeletonGeneration = 0;
 		vr::DriverPose_t pose{};
-		bool hasHmdPose = false;
-		vr::DriverPose_t hmdPose{};
 		vr::VRBoneTransform_t transforms[SteamVR::HandSkeletonBone::eBone_Count]{};
 	};
 	static_assert(sizeof(SteamVRHandBaselinePayload) <= NativePacketReadChunkSize);
@@ -110,10 +109,18 @@ namespace HOL
 		uint32_t sourceDeviceId = vr::k_unTrackedDeviceIndexInvalid;
 		uint64_t poseGeneration = 0;
 		vr::DriverPose_t pose{};
-		bool hasHmdPose = false;
-		vr::DriverPose_t hmdPose{};
 	};
 	static_assert(sizeof(SteamVRHandPosePayload) <= NativePacketReadChunkSize);
+
+	// Forwarded separately because HMD and hand controllers submit poses independently.
+	struct SteamVRHmdPosePayload
+	{
+		bool active = false;
+		uint32_t sourceDeviceId = vr::k_unTrackedDeviceIndexInvalid;
+		uint64_t poseGeneration = 0;
+		vr::DriverPose_t pose{};
+	};
+	static_assert(sizeof(SteamVRHmdPosePayload) <= NativePacketReadChunkSize);
 
 	struct MultimodalPosePayload
 	{
