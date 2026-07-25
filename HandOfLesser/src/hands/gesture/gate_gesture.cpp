@@ -45,23 +45,25 @@ namespace HOL::Gesture::GateGesture
 			return triggerValue;
 		}
 
-		float modifierValue = std::clamp(this->mModifierGesture->evaluate(data), 0.0f, 1.0f);
 		auto now = std::chrono::steady_clock::now();
+		float modifierValue = std::clamp(this->mModifierGesture->evaluate(data), 0.0f, 1.0f);
 		bool triggerActive = triggerValue >= 1.0f;
 		bool modifierActive = modifierValue >= 1.0f;
 
-		if (triggerActive)
+		if (triggerActive && !this->mTriggerWasActive)
 		{
-			if (!this->mTriggerWasActive)
-			{
-				this->mTriggerActiveSince = now;
-				this->mTriggerWasActive = true;
-			}
+			this->mTriggerActiveSince = now;
+			this->mTriggerWasActive = true;
 		}
-		else
+
+		if (!triggerActive)
 		{
+			// The gate override only protects an already-triggered main gesture. Once the main
+			// gesture drops, use the live modifier value again and allow a fresh attempt.
+			this->mGateLocked = false;
 			this->mBlockedUntilReleased = false;
 			this->mTriggerWasActive = false;
+			this->mQualificationActive = false;
 		}
 
 		if (modifierActive)
@@ -75,6 +77,12 @@ namespace HOL::Gesture::GateGesture
 		else
 		{
 			this->mModifierWasActive = false;
+			this->mQualificationActive = false;
+		}
+
+		if (this->mGateLocked)
+		{
+			return triggerValue;
 		}
 
 		if (this->mBlockedUntilReleased)
@@ -84,7 +92,7 @@ namespace HOL::Gesture::GateGesture
 
 		if (!triggerActive)
 		{
-			return 0.0f;
+			return modifierActive ? triggerValue : 0.0f;
 		}
 
 		if (!modifierActive)
@@ -108,6 +116,18 @@ namespace HOL::Gesture::GateGesture
 			return 0.0f;
 		}
 
+		if (!this->mQualificationActive)
+		{
+			this->mQualificationStartTime = now;
+			this->mQualificationActive = true;
+		}
+
+		if ((now - this->mQualificationStartTime) < this->parameters.requiredActiveTime)
+		{
+			return 0.0f;
+		}
+
+		this->mGateLocked = true;
 		return triggerValue;
 	}
 } // namespace HOL::Gesture::GateGesture

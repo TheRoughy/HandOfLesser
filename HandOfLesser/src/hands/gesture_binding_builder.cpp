@@ -331,18 +331,25 @@ namespace
 				   const GestureBinding& binding)
 	{
 		std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> wrappedGesture = gesture;
+		const bool usesHold = usesModifier(binding, GestureModifier::Hold);
 
 		if (auto gatedModifierGesture = buildGatedModifierGesture(binding))
 		{
 			auto gate = HOL::Gesture::GateGesture::Gesture::Create();
 			gate->parameters.allowedLagTime
 				= std::chrono::milliseconds(HOL::Config.input.gateLagTimeMS);
+			if (usesHold)
+			{
+				// Keep the main gesture and its modifiers valid for the full hold duration,
+				// then protect it from modifier changes while the main gesture remains active.
+				gate->parameters.requiredActiveTime
+					= std::chrono::milliseconds(HOL::Config.input.holdDurationMS);
+			}
 			gate->setTriggerGesture(wrappedGesture);
 			gate->setModifierGesture(gatedModifierGesture);
 			wrappedGesture = gate;
 		}
-
-		if (usesModifier(binding, GestureModifier::Hold))
+		else if (usesHold)
 		{
 			wrappedGesture = wrapWithHold(wrappedGesture);
 		}
