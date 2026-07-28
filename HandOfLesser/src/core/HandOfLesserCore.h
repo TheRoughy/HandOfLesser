@@ -13,6 +13,7 @@
 #include "src/steamvr/steamvr_input.h"
 #include "src/steamvr/skeletal_input.h"
 #include "src/openxr/body_tracking.h"
+#include "src/openxr/virtual_desktop_tracking_source.h"
 #include "src/core/features_manager.h"
 #include "src/core/state_global.h"
 
@@ -55,6 +56,7 @@ namespace HOL
 		VRChatInput mVrchatInput;
 		SteamVR::SkeletalInput mSkeletalInput;
 		SteamVR::SteamVRInput mSteamVRInput;
+		VirtualDesktop::VirtualDesktopTrackingSource mVirtualDesktopTrackingSource;
 		NamedPipeTransport mDriverTransport;
 		UdpTransport mOscTransport;
 		// Non-owning selected alternate provider; null means tracking is queried from OpenXR.

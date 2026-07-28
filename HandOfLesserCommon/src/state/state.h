@@ -13,6 +13,7 @@ namespace HOL::state
 	{
 		OpenXR,
 		SteamVRDriver,
+		VirtualDesktopSharedMemory,
 	};
 
 	// Readiness of the selected provider, independent of the OpenXR session lifecycle.

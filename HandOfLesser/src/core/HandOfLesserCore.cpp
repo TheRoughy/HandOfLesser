@@ -109,16 +109,39 @@ void HandOfLesserCore::init(int serverPort)
 	Config.steamvr.poseSmoothing = runtimeState.isOVR ? Config.steamvr.oculusPoseSmoothing
 											 : Config.steamvr.standardPoseSmoothing;
 
+	if (!Config.openxr.forceOpenXRTracking)
+	{
+		if (runtimeState.isSteamVR)
+		{
+			runtimeState.trackingProvider = state::TrackingProvider::SteamVRDriver;
+		}
+		else if (runtimeState.isVDXR)
+		{
+			runtimeState.trackingProvider
+				= state::TrackingProvider::VirtualDesktopSharedMemory;
+			// The shared block exposes the same extensions VDXR would normally advertise.
+			runtimeState.supportsBodyTracking = true;
+			runtimeState.supportsHandTrackingAim = true;
+			runtimeState.supportsHandTrackingDataSource = true;
+		}
+	}
+
 	// The processors and gesture graph are source-independent. OpenXR handles are created below
 	// only when OpenXR is selected as the provider.
 	this->mHandTracking.init();
 	this->mBodyTracking.init();
 
-	if (runtimeState.isSteamVR && !Config.openxr.forceOpenXRTracking)
+	if (runtimeState.trackingProvider == state::TrackingProvider::SteamVRDriver)
 	{
-		runtimeState.trackingProvider = state::TrackingProvider::SteamVRDriver;
 		this->mTrackingSource = &this->mHandTracking.getSteamVRTrackingSource();
 		std::cout << "Using SteamVR driver tracking; OpenXR will not be started." << std::endl;
+	}
+	else if (runtimeState.trackingProvider
+			 == state::TrackingProvider::VirtualDesktopSharedMemory)
+	{
+		this->mTrackingSource = &this->mVirtualDesktopTrackingSource;
+		std::cout << "Using Virtual Desktop shared tracking; OpenXR will not be started."
+				  << std::endl;
 	}
 	else
 	{

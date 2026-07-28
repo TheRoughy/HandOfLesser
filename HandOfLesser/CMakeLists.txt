@@ -6,6 +6,7 @@
 	src/openxr/HandTracking.cpp
 	src/openxr/HandTrackingInterface.cpp
 	src/openxr/InstanceHolder.cpp
+	src/openxr/virtual_desktop_tracking_source.cpp
 
 	src/core/settings_global.cpp
 	src/core/state_global.cpp

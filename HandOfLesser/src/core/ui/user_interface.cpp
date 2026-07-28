@@ -2049,10 +2049,20 @@ void HOL::UserInterface::buildMain()
 
 	ImGui::Text("Tracking source:");
 	ImGui::SameLine();
-	ImGui::Text("%s",
-				HOL::state::Runtime.trackingProvider == HOL::state::TrackingProvider::OpenXR
-					? "OpenXR"
-					: "SteamVR Driver");
+	const char* trackingSourceName = "Unknown";
+	switch (HOL::state::Runtime.trackingProvider)
+	{
+		case HOL::state::TrackingProvider::OpenXR:
+			trackingSourceName = "OpenXR";
+			break;
+		case HOL::state::TrackingProvider::SteamVRDriver:
+			trackingSourceName = "SteamVR Driver";
+			break;
+		case HOL::state::TrackingProvider::VirtualDesktopSharedMemory:
+			trackingSourceName = "Virtual Desktop Shared Memory";
+			break;
+	}
+	ImGui::Text("%s", trackingSourceName);
 	ImGui::SameLine();
 	switch (HOL::state::Runtime.trackingProviderState)
 	{
@@ -2178,7 +2188,7 @@ void HOL::UserInterface::buildMain()
 	{
 		showWrappedTooltip(
 			"Use the selected OpenXR runtime even when an alternate tracking source is available. "
-			"SteamXR and VDXR have limitations but allow data to be retrived without OpenXR, which "
+			"SteamXR and VDXR allow data to be retrieved without OpenXR, which "
 			"is the default behavior. Only enable this for debugging.");
 	}
 
@@ -2187,7 +2197,8 @@ void HOL::UserInterface::buildMain()
 	if (ImGui::IsItemHovered())
 	{
 		showWrappedTooltip(
-			"Amount of prediction to request from the OpenXR runtime. Does not apply to VDXR.");
+			"Amount of prediction to request from the OpenXR runtime. Does not apply to alternate "
+			"tracking sources.");
 	}
 	if (ImGui::InputInt("Update Interval (ms)", &Config.general.updateIntervalMS))
 	{
