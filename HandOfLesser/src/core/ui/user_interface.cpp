@@ -694,15 +694,15 @@ void HOL::UserInterface::buildBindings()
 		showWrappedTooltip("Cone of the head looking at the hand");
 	}
 
-	float inFrontFovDegrees = Config.input.inFrontFovDegrees;
-	if (ImGui::InputFloat("In-front FoV (deg)", &inFrontFovDegrees, 1.0f, 5.0f, "%.1f"))
+	float inViewFovDegrees = Config.input.inViewFovDegrees;
+	if (ImGui::InputFloat("In-view FoV (deg)", &inViewFovDegrees, 1.0f, 5.0f, "%.1f"))
 	{
-		Config.input.inFrontFovDegrees = std::clamp(inFrontFovDegrees, 1.0f, 179.0f);
+		Config.input.inViewFovDegrees = std::clamp(inViewFovDegrees, 1.0f, 179.0f);
 		rebuildActions = true;
 	}
 	if (ImGui::IsItemHovered())
 	{
-		showWrappedTooltip("Cone infront of the user, from the torso.");
+		showWrappedTooltip("Wider cone of the head looking towards the hand.");
 	}
 
 	float palmFacingFovDegrees = Config.input.palmFacingFovDegrees;
@@ -725,7 +725,7 @@ void HOL::UserInterface::buildBindings()
 		Config.input.gateLagTimeMS = defaults.gateLagTimeMS;
 		Config.input.pinchDistanceMM = defaults.pinchDistanceMM;
 		Config.input.lookAtFovDegrees = defaults.lookAtFovDegrees;
-		Config.input.inFrontFovDegrees = defaults.inFrontFovDegrees;
+		Config.input.inViewFovDegrees = defaults.inViewFovDegrees;
 		Config.input.palmFacingFovDegrees = defaults.palmFacingFovDegrees;
 		rebuildActions = true;
 	}
@@ -1137,29 +1137,28 @@ void HOL::UserInterface::buildBindings()
 			}
 		}
 
-		bool useInFront
-			= settings::hasGestureModifier(b.modifiers, settings::GestureModifier::InFrontOfUser);
-		if (ImGui::Checkbox("In Front", &useInFront))
+		bool useInView
+			= settings::hasGestureModifier(b.modifiers, settings::GestureModifier::InView);
+		if (ImGui::Checkbox("In View", &useInView))
 		{
-			settings::setGestureModifier(
-				b.modifiers, settings::GestureModifier::InFrontOfUser, useInFront);
-			if (!useInFront)
+			settings::setGestureModifier(b.modifiers, settings::GestureModifier::InView, useInView);
+			if (!useInView)
 			{
 				settings::setInvertedGestureModifier(
-					b.invertedModifiers, settings::GestureModifier::InFrontOfUser, false);
+					b.invertedModifiers, settings::GestureModifier::InView, false);
 			}
 		}
-		if (useInFront)
+		if (useInView)
 		{
 			ImGui::SameLine();
-			ImGui::TextDisabled("(%.1f deg)", Config.input.inFrontFovDegrees);
+			ImGui::TextDisabled("(%.1f deg)", Config.input.inViewFovDegrees);
 			ImGui::SameLine();
-			bool invertInFront = settings::hasGestureModifier(
-				b.invertedModifiers, settings::GestureModifier::InFrontOfUser);
-			if (rightAlignCheckbox("Invert##InFront", &invertInFront))
+			bool invertInView = settings::hasGestureModifier(
+				b.invertedModifiers, settings::GestureModifier::InView);
+			if (rightAlignCheckbox("Invert##InView", &invertInView))
 			{
 				settings::setInvertedGestureModifier(
-					b.invertedModifiers, settings::GestureModifier::InFrontOfUser, invertInFront);
+					b.invertedModifiers, settings::GestureModifier::InView, invertInView);
 			}
 		}
 

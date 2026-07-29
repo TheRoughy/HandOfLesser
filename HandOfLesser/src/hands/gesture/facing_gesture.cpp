@@ -60,14 +60,6 @@ namespace HOL::Gesture::FacingGesture
 				}
 				break;
 
-			case Source::Chest:
-				if (!tryGetBodyJointPose(
-						data.bodyJoints, XR_BODY_JOINT_CHEST_FB, sourcePosition, sourceOrientation))
-				{
-					return 0.0f;
-				}
-				break;
-
 			case Source::Palm:
 				sourcePosition = handPose->palmLocation.position;
 				sourceOrientation = handPose->palmLocation.orientation;

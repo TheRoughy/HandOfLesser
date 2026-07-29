@@ -7,7 +7,6 @@ namespace HOL::Gesture::FacingGesture
 	enum class Source
 	{
 		Head,
-		Chest,
 		Palm
 	};
 

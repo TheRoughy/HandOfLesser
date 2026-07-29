@@ -7,7 +7,7 @@ namespace HOL::settings
 		std::vector<GestureBinding> bindings;
 		auto addBinding = [&](GestureBinding binding)
 		{
-			binding.modifiers |= static_cast<uint32_t>(GestureModifier::InFrontOfUser);
+			binding.modifiers |= static_cast<uint32_t>(GestureModifier::InView);
 			bindings.push_back(binding);
 		};
 
@@ -163,7 +163,7 @@ namespace HOL::settings
 		system.proximityFinger = FingerIndex;
 		system.modifiers = static_cast<uint32_t>(GestureModifier::Hold)
 						   | static_cast<uint32_t>(GestureModifier::LookingAtHand)
-						   | static_cast<uint32_t>(GestureModifier::InFrontOfUser);
+						   | static_cast<uint32_t>(GestureModifier::InView);
 		system.target = InputTarget::System;
 		system.pressAndRelease = true;
 		bindings.push_back(system);

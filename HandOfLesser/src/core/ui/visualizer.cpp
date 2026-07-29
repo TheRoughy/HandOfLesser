@@ -162,7 +162,7 @@ namespace HOL
 		ImGui::Checkbox("Controller Trails", &HOL::Config.visualizer.showControllerPositionTrails);
 		ImGui::Checkbox("Look-at Cone", &HOL::Config.visualizer.showLookAtModifierCone);
 		ImGui::SameLine();
-		ImGui::Checkbox("In-front Cone", &HOL::Config.visualizer.showInFrontModifierCone);
+		ImGui::Checkbox("In-view Cone", &HOL::Config.visualizer.showInViewModifierCone);
 		ImGui::SameLine();
 		ImGui::Checkbox(
 			"Palm-facing Cone", &HOL::Config.visualizer.showPalmFacingModifierCone);
@@ -708,6 +708,16 @@ namespace HOL
 						   0.25f,
 						   IM_COL32(80, 180, 255, 35),
 						   IM_COL32(80, 180, 255, 110));
+			}
+
+			if (HOL::Config.visualizer.showInViewModifierCone)
+			{
+				submitCone(bodyTracking.headPose.position,
+						   headForward,
+						   HOL::Config.input.inViewFovDegrees,
+						   0.25f,
+						   IM_COL32(255, 210, 80, 28),
+						   IM_COL32(255, 210, 80, 110));
 			}
 		}
 

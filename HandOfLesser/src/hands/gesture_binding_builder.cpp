@@ -209,21 +209,26 @@ namespace
 		return hold;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildLookAtHandModifier(HandSide side,
-																				bool inverted)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	buildFacingModifier(HandSide side,
+						float fovDegrees,
+						HOL::Gesture::FacingGesture::Source source,
+						HOL::Gesture::FacingGesture::Target target,
+						const Eigen::Vector3f& localForward,
+						bool inverted)
 	{
-		auto lookAt = HOL::Gesture::FacingGesture::Gesture::Create();
-		lookAt->parameters.side = side;
-		lookAt->parameters.fovDegrees = HOL::Config.input.lookAtFovDegrees;
-		lookAt->parameters.source = HOL::Gesture::FacingGesture::Source::Head;
-		lookAt->parameters.target = HOL::Gesture::FacingGesture::Target::HandPalm;
-		lookAt->parameters.localForward = Eigen::Vector3f::UnitY();
+		auto facing = HOL::Gesture::FacingGesture::Gesture::Create();
+		facing->parameters.side = side;
+		facing->parameters.fovDegrees = fovDegrees;
+		facing->parameters.source = source;
+		facing->parameters.target = target;
+		facing->parameters.localForward = localForward;
 
-		std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> modifierGesture = lookAt;
+		std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> modifierGesture = facing;
 		if (inverted)
 		{
 			auto inverse = HOL::Gesture::InverseGesture::Gesture::Create();
-			inverse->setGesture(lookAt);
+			inverse->setGesture(facing);
 			inverse->setBinaryThreshold(1.0f);
 			modifierGesture = inverse;
 		}
@@ -231,48 +236,37 @@ namespace
 		return modifierGesture;
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildInFrontOfUserModifier(HandSide side,
-																				   bool inverted)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildLookAtHandModifier(HandSide side,
+																				bool inverted)
 	{
-		auto inFront = HOL::Gesture::FacingGesture::Gesture::Create();
-		inFront->parameters.side = side;
-		inFront->parameters.fovDegrees = HOL::Config.input.inFrontFovDegrees;
-		inFront->parameters.source = HOL::Gesture::FacingGesture::Source::Chest;
-		inFront->parameters.target = HOL::Gesture::FacingGesture::Target::HandPalm;
-		inFront->parameters.localForward = Eigen::Vector3f::UnitY();
+		return buildFacingModifier(side,
+								   HOL::Config.input.lookAtFovDegrees,
+								   HOL::Gesture::FacingGesture::Source::Head,
+								   HOL::Gesture::FacingGesture::Target::HandPalm,
+								   Eigen::Vector3f::UnitY(),
+								   inverted);
+	}
 
-		std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> modifierGesture = inFront;
-		if (inverted)
-		{
-			auto inverse = HOL::Gesture::InverseGesture::Gesture::Create();
-			inverse->setGesture(inFront);
-			inverse->setBinaryThreshold(1.0f);
-			modifierGesture = inverse;
-		}
-
-		return modifierGesture;
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildInViewModifier(HandSide side,
+																			bool inverted)
+	{
+		return buildFacingModifier(side,
+								   HOL::Config.input.inViewFovDegrees,
+								   HOL::Gesture::FacingGesture::Source::Head,
+								   HOL::Gesture::FacingGesture::Target::HandPalm,
+								   Eigen::Vector3f::UnitY(),
+								   inverted);
 	}
 
 	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildPalmFacingUserModifier(HandSide side,
 																					bool inverted)
 	{
-		auto palmFacing = HOL::Gesture::FacingGesture::Gesture::Create();
-		palmFacing->parameters.side = side;
-		palmFacing->parameters.fovDegrees = HOL::Config.input.palmFacingFovDegrees;
-		palmFacing->parameters.source = HOL::Gesture::FacingGesture::Source::Palm;
-		palmFacing->parameters.target = HOL::Gesture::FacingGesture::Target::Head;
-		palmFacing->parameters.localForward = -Eigen::Vector3f::UnitY();
-
-		std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> modifierGesture = palmFacing;
-		if (inverted)
-		{
-			auto inverse = HOL::Gesture::InverseGesture::Gesture::Create();
-			inverse->setGesture(palmFacing);
-			inverse->setBinaryThreshold(1.0f);
-			modifierGesture = inverse;
-		}
-
-		return modifierGesture;
+		return buildFacingModifier(side,
+								   HOL::Config.input.palmFacingFovDegrees,
+								   HOL::Gesture::FacingGesture::Source::Palm,
+								   HOL::Gesture::FacingGesture::Target::Head,
+								   -Eigen::Vector3f::UnitY(),
+								   inverted);
 	}
 
 	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
@@ -293,10 +287,10 @@ namespace
 				binding.side, isModifierInverted(binding, GestureModifier::LookingAtHand)));
 		}
 
-		if (usesModifier(binding, GestureModifier::InFrontOfUser))
+		if (usesModifier(binding, GestureModifier::InView))
 		{
-			modifiers.push_back(buildInFrontOfUserModifier(
-				binding.side, isModifierInverted(binding, GestureModifier::InFrontOfUser)));
+			modifiers.push_back(buildInViewModifier(
+				binding.side, isModifierInverted(binding, GestureModifier::InView)));
 		}
 
 		if (usesModifier(binding, GestureModifier::PalmFacingUser))
@@ -690,8 +684,7 @@ namespace HOL::GestureBindings
 		appendModifierLabel(labels, binding, GestureModifier::Hold, "Hold");
 		appendModifierLabel(
 			labels, binding, GestureModifier::LookingAtHand, "Look At Hand", "Not Look At Hand");
-		appendModifierLabel(
-			labels, binding, GestureModifier::InFrontOfUser, "In Front", "Not In Front");
+		appendModifierLabel(labels, binding, GestureModifier::InView, "In View", "Not In View");
 		appendModifierLabel(labels,
 							binding,
 							GestureModifier::PalmFacingUser,

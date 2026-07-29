@@ -165,7 +165,7 @@ namespace HOL
 			bool showHandTrackingJointAxes = false;
 			bool showBodyTrackerAxes = false;
 			bool showLookAtModifierCone = false;
-			bool showInFrontModifierCone = false;
+			bool showInViewModifierCone = false;
 			bool showPalmFacingModifierCone = false;
 			bool showControllerPositionTrails = false;
 		};
@@ -198,7 +198,7 @@ namespace HOL
 		{
 			ClosedHand = 1 << 0,
 			Hold = 1 << 1,
-			InFrontOfUser = 1 << 2,
+			InView = 1 << 2,
 			LookingAtHand = 1 << 3,
 			PalmFacingUser = 1 << 4
 		};
@@ -298,7 +298,7 @@ namespace HOL
 			int holdDurationMS = 1000;
 			int gateLagTimeMS = 10;
 			int pinchDistanceMM = 25;
-			float inFrontFovDegrees = 120.0f;
+			float inViewFovDegrees = 120.0f;
 			float lookAtFovDegrees = 45.0f;
 			float palmFacingFovDegrees = 80.0f;
 			std::vector<GestureBinding> gestureBindings = defaultGestureBindings();
@@ -414,7 +414,7 @@ namespace HOL
 
 		struct HandOfLesserSettings
 		{
-			static constexpr int CurrentVersion = 1;
+			static constexpr int CurrentVersion = 2;
 
 			int version = CurrentVersion;
 			GeneralSettings general;

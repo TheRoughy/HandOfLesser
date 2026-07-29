@@ -898,6 +898,7 @@ void HOL::HandOfLesserCore::loadSettings()
 			nlohmann::json j;
 			file >> j;
 			Config = j.get<HOL::settings::HandOfLesserSettings>();
+			Config.version = HOL::settings::HandOfLesserSettings::CurrentVersion;
 
 			// Reset runtime-only flag for all devices after loading from JSON
 			for (auto& [serial, device] : Config.deviceSettings.devices)

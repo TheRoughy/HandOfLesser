@@ -141,7 +141,7 @@ namespace HOL
 				 {"showHandTrackingJointAxes", settings.showHandTrackingJointAxes},
 				 {"showBodyTrackerAxes", settings.showBodyTrackerAxes},
 				 {"showLookAtModifierCone", settings.showLookAtModifierCone},
-				 {"showInFrontModifierCone", settings.showInFrontModifierCone},
+				 {"showInViewModifierCone", settings.showInViewModifierCone},
 				 {"showPalmFacingModifierCone", settings.showPalmFacingModifierCone},
 				 {"showControllerPositionTrails", settings.showControllerPositionTrails}};
 		}
@@ -161,8 +161,16 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "showBodyTrackerAxes", settings.showBodyTrackerAxes);
 			nlohmann::get_to_if_present(
 				j, "showLookAtModifierCone", settings.showLookAtModifierCone);
-			nlohmann::get_to_if_present(
-				j, "showInFrontModifierCone", settings.showInFrontModifierCone);
+			if (j.contains("showInViewModifierCone"))
+			{
+				nlohmann::get_to_if_present(
+					j, "showInViewModifierCone", settings.showInViewModifierCone);
+			}
+			else
+			{
+				nlohmann::get_to_if_present(
+					j, "showInFrontModifierCone", settings.showInViewModifierCone);
+			}
 			nlohmann::get_to_if_present(
 				j, "showPalmFacingModifierCone", settings.showPalmFacingModifierCone);
 			nlohmann::get_to_if_present(
@@ -216,7 +224,7 @@ namespace HOL
 				 {"holdDurationMS", settings.holdDurationMS},
 				 {"gateLagTimeMS", settings.gateLagTimeMS},
 				 {"pinchDistanceMM", settings.pinchDistanceMM},
-				 {"inFrontFovDegrees", settings.inFrontFovDegrees},
+				 {"inViewFovDegrees", settings.inViewFovDegrees},
 				 {"lookAtFovDegrees", settings.lookAtFovDegrees},
 				 {"palmFacingFovDegrees", settings.palmFacingFovDegrees},
 				 {"gestureBindings", settings.gestureBindings}};
@@ -232,7 +240,14 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "holdDurationMS", settings.holdDurationMS);
 			nlohmann::get_to_if_present(j, "gateLagTimeMS", settings.gateLagTimeMS);
 			nlohmann::get_to_if_present(j, "pinchDistanceMM", settings.pinchDistanceMM);
-			nlohmann::get_to_if_present(j, "inFrontFovDegrees", settings.inFrontFovDegrees);
+			if (j.contains("inViewFovDegrees"))
+			{
+				nlohmann::get_to_if_present(j, "inViewFovDegrees", settings.inViewFovDegrees);
+			}
+			else
+			{
+				nlohmann::get_to_if_present(j, "inFrontFovDegrees", settings.inViewFovDegrees);
+			}
 			nlohmann::get_to_if_present(j, "lookAtFovDegrees", settings.lookAtFovDegrees);
 			nlohmann::get_to_if_present(
 				j, "palmFacingFovDegrees", settings.palmFacingFovDegrees);
