@@ -174,25 +174,27 @@ namespace
 		return HOL::settings::hasGestureModifier(binding.modifiers, modifier);
 	}
 
-	bool isModifierInverted(const GestureBinding& binding, GestureModifier modifier)
+	bool usesFacingModifier(const GestureBinding& binding, GestureModifier modifier)
 	{
-		return HOL::settings::hasGestureModifier(binding.invertedModifiers, modifier);
+		return HOL::settings::hasGestureModifier(binding.facingModifiers, modifier);
+	}
+
+	bool isFacingModifierInverted(const GestureBinding& binding, GestureModifier modifier)
+	{
+		return HOL::settings::hasGestureModifier(binding.invertedFacingModifiers, modifier);
 	}
 
 	void appendModifierLabel(std::vector<std::string>& labels,
 							 const GestureBinding& binding,
 							 GestureModifier modifier,
-							 const char* normalText,
-							 const char* invertedText = nullptr)
+							 const char* text)
 	{
 		if (!usesModifier(binding, modifier))
 		{
 			return;
 		}
 
-		labels.push_back((invertedText != nullptr && isModifierInverted(binding, modifier))
-							 ? invertedText
-							 : normalText);
+		labels.push_back(text);
 	}
 
 	bool supportsPressAndRelease(InputTarget target)
@@ -247,15 +249,14 @@ namespace
 								   inverted);
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildInViewModifier(HandSide side,
-																			bool inverted)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildInViewModifier(HandSide side)
 	{
 		return buildFacingModifier(side,
 								   HOL::Config.input.inViewFovDegrees,
 								   HOL::Gesture::FacingGesture::Source::Head,
 								   HOL::Gesture::FacingGesture::Target::HandPalm,
 								   Eigen::Vector3f::UnitY(),
-								   inverted);
+								   false);
 	}
 
 	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> buildPalmFacingUserModifier(HandSide side,
@@ -269,36 +270,9 @@ namespace
 								   inverted);
 	}
 
-	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
-	buildGatedModifierGesture(const GestureBinding& binding)
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture> combineModifierGestures(
+		const std::vector<std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>>& modifiers)
 	{
-		std::vector<std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>> modifiers;
-
-		if (usesModifier(binding, GestureModifier::ClosedHand)
-			&& binding.kind == GestureKind::Proximity
-			&& binding.proximityFinger == HOL::FingerIndex)
-		{
-			modifiers.push_back(buildClosedHandModifier(binding.side, binding.proximityFinger));
-		}
-
-		if (usesModifier(binding, GestureModifier::LookingAtHand))
-		{
-			modifiers.push_back(buildLookAtHandModifier(
-				binding.side, isModifierInverted(binding, GestureModifier::LookingAtHand)));
-		}
-
-		if (usesModifier(binding, GestureModifier::InView))
-		{
-			modifiers.push_back(buildInViewModifier(
-				binding.side, isModifierInverted(binding, GestureModifier::InView)));
-		}
-
-		if (usesModifier(binding, GestureModifier::PalmFacingUser))
-		{
-			modifiers.push_back(buildPalmFacingUserModifier(
-				binding.side, isModifierInverted(binding, GestureModifier::PalmFacingUser)));
-		}
-
 		if (modifiers.empty())
 		{
 			return nullptr;
@@ -318,6 +292,63 @@ namespace
 		}
 
 		return combo;
+	}
+
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	buildFacingConditionGesture(const GestureBinding& binding)
+	{
+		std::vector<std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>> facingModifiers;
+		if (usesFacingModifier(binding, GestureModifier::LookingAtHand))
+		{
+			facingModifiers.push_back(buildLookAtHandModifier(
+				binding.side,
+				isFacingModifierInverted(binding, GestureModifier::LookingAtHand)));
+		}
+
+		if (usesFacingModifier(binding, GestureModifier::PalmFacingUser))
+		{
+			facingModifiers.push_back(buildPalmFacingUserModifier(
+				binding.side,
+				isFacingModifierInverted(binding, GestureModifier::PalmFacingUser)));
+		}
+
+		auto facingCondition = combineModifierGestures(facingModifiers);
+		if (!facingCondition
+			|| binding.facingConditionMode == HOL::settings::FacingConditionMode::AllowIf)
+		{
+			return facingCondition;
+		}
+
+		// Invert the completed conjunction so either missing condition allows the gesture.
+		auto inverse = HOL::Gesture::InverseGesture::Gesture::Create();
+		inverse->setGesture(facingCondition);
+		inverse->setBinaryThreshold(1.0f);
+		return inverse;
+	}
+
+	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
+	buildGatedModifierGesture(const GestureBinding& binding)
+	{
+		std::vector<std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>> modifiers;
+
+		if (usesModifier(binding, GestureModifier::ClosedHand)
+			&& binding.kind == GestureKind::Proximity
+			&& binding.proximityFinger == HOL::FingerIndex)
+		{
+			modifiers.push_back(buildClosedHandModifier(binding.side, binding.proximityFinger));
+		}
+
+		if (usesModifier(binding, GestureModifier::InView))
+		{
+			modifiers.push_back(buildInViewModifier(binding.side));
+		}
+
+		if (auto facingCondition = buildFacingConditionGesture(binding))
+		{
+			modifiers.push_back(facingCondition);
+		}
+
+		return combineModifierGestures(modifiers);
 	}
 
 	std::shared_ptr<HOL::Gesture::BaseGesture::Gesture>
@@ -682,14 +713,40 @@ namespace HOL::GestureBindings
 
 		appendModifierLabel(labels, binding, GestureModifier::ClosedHand, "Closed Hand");
 		appendModifierLabel(labels, binding, GestureModifier::Hold, "Hold");
-		appendModifierLabel(
-			labels, binding, GestureModifier::LookingAtHand, "Look At Hand", "Not Look At Hand");
-		appendModifierLabel(labels, binding, GestureModifier::InView, "In View", "Not In View");
-		appendModifierLabel(labels,
-							binding,
-							GestureModifier::PalmFacingUser,
-							"Palm Facing User",
-							"Palm Not Facing User");
+		appendModifierLabel(labels, binding, GestureModifier::InView, "In View");
+
+		std::vector<std::string> facingLabels;
+		if (usesFacingModifier(binding, GestureModifier::LookingAtHand))
+		{
+			facingLabels.push_back(
+				isFacingModifierInverted(binding, GestureModifier::LookingAtHand)
+					? "Not Look At Hand"
+					: "Look At Hand");
+		}
+		if (usesFacingModifier(binding, GestureModifier::PalmFacingUser))
+		{
+			facingLabels.push_back(
+				isFacingModifierInverted(binding, GestureModifier::PalmFacingUser)
+					? "Palm Not Facing User"
+					: "Palm Facing User");
+		}
+
+		if (!facingLabels.empty())
+		{
+			std::string facingDescription = facingLabels.front();
+			for (size_t i = 1; i < facingLabels.size(); i++)
+			{
+				facingDescription += " + ";
+				facingDescription += facingLabels[i];
+			}
+
+			if (binding.facingConditionMode == HOL::settings::FacingConditionMode::AllowIfNot)
+			{
+				facingDescription = "Not (" + facingDescription + ")";
+			}
+			labels.push_back(facingDescription);
+		}
+
 		if (binding.pressAndRelease)
 		{
 			labels.push_back("Press and Release");

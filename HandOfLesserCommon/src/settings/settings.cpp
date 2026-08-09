@@ -38,6 +38,13 @@ namespace HOL::settings
 			b.kind = GestureKind::Proximity;
 			b.proximityFinger = HOL::FingerIndex;
 			b.target = InputTarget::Trigger;
+			if (b.side == HOL::LeftHand)
+			{
+				b.facingModifiers
+					= static_cast<uint32_t>(GestureModifier::LookingAtHand)
+					  | static_cast<uint32_t>(GestureModifier::PalmFacingUser);
+				b.facingConditionMode = FacingConditionMode::AllowIfNot;
+			}
 			addBinding(b);
 		}
 
@@ -69,8 +76,9 @@ namespace HOL::settings
 			b.side = HOL::LeftHand;
 			b.kind = GestureKind::Proximity;
 			b.proximityFinger = HOL::FingerIndex;
-			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold)
-						  | static_cast<uint32_t>(GestureModifier::LookingAtHand);
+			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold);
+			b.facingModifiers = static_cast<uint32_t>(GestureModifier::LookingAtHand)
+							| static_cast<uint32_t>(GestureModifier::PalmFacingUser);
 			b.target = InputTarget::System;
 			b.pressAndRelease = true;
 			addBinding(b);
@@ -82,8 +90,8 @@ namespace HOL::settings
 			b.side = HOL::LeftHand;
 			b.kind = GestureKind::Proximity;
 			b.proximityFinger = HOL::FingerRing;
-			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold)
-						  | static_cast<uint32_t>(GestureModifier::LookingAtHand);
+			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold);
+			b.facingModifiers = static_cast<uint32_t>(GestureModifier::LookingAtHand);
 			b.target = InputTarget::X;
 			b.pressAndRelease = true;
 			addBinding(b);
@@ -95,8 +103,8 @@ namespace HOL::settings
 			b.side = HOL::LeftHand;
 			b.kind = GestureKind::Proximity;
 			b.proximityFinger = HOL::FingerLittle;
-			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold)
-						  | static_cast<uint32_t>(GestureModifier::LookingAtHand);
+			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold);
+			b.facingModifiers = static_cast<uint32_t>(GestureModifier::LookingAtHand);
 			b.target = InputTarget::Y;
 			b.pressAndRelease = true;
 			addBinding(b);
@@ -118,8 +126,8 @@ namespace HOL::settings
 			b.side = HOL::RightHand;
 			b.kind = GestureKind::Proximity;
 			b.proximityFinger = HOL::FingerLittle;
-			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold)
-						  | static_cast<uint32_t>(GestureModifier::LookingAtHand);
+			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold);
+			b.facingModifiers = static_cast<uint32_t>(GestureModifier::LookingAtHand);
 			b.target = InputTarget::Y;
 			addBinding(b);
 		}
@@ -148,6 +156,14 @@ namespace HOL::settings
 				binding.kind = GestureKind::Proximity;
 				binding.proximityFinger = static_cast<FingerType>(finger);
 				binding.target = pinchTargets[finger - FingerIndex];
+				if (binding.side == LeftHand && binding.proximityFinger == FingerIndex)
+				{
+					binding.modifiers = static_cast<uint32_t>(GestureModifier::InView);
+					binding.facingModifiers
+						= static_cast<uint32_t>(GestureModifier::LookingAtHand)
+						  | static_cast<uint32_t>(GestureModifier::PalmFacingUser);
+					binding.facingConditionMode = FacingConditionMode::AllowIfNot;
+				}
 				bindings.push_back(binding);
 			}
 
@@ -170,8 +186,9 @@ namespace HOL::settings
 		system.kind = GestureKind::Proximity;
 		system.proximityFinger = FingerIndex;
 		system.modifiers = static_cast<uint32_t>(GestureModifier::Hold)
-						   | static_cast<uint32_t>(GestureModifier::LookingAtHand)
 						   | static_cast<uint32_t>(GestureModifier::InView);
+		system.facingModifiers = static_cast<uint32_t>(GestureModifier::LookingAtHand)
+							 | static_cast<uint32_t>(GestureModifier::PalmFacingUser);
 		system.target = InputTarget::System;
 		system.pressAndRelease = true;
 		bindings.push_back(system);

@@ -1111,16 +1111,41 @@ void HOL::UserInterface::buildBindings()
 			return ImGui::Checkbox(label, value);
 		};
 
-		bool useLookAt
-			= settings::hasGestureModifier(b.modifiers, settings::GestureModifier::LookingAtHand);
+		bool useInView
+			= settings::hasGestureModifier(b.modifiers, settings::GestureModifier::InView);
+		if (ImGui::Checkbox("In View", &useInView))
+		{
+			settings::setGestureModifier(b.modifiers, settings::GestureModifier::InView, useInView);
+		}
+		if (useInView)
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("(%.1f deg)", Config.input.inViewFovDegrees);
+		}
+
+		ImGui::SeparatorText("Facing Condition");
+		int facingConditionMode = static_cast<int>(b.facingConditionMode);
+		if (ImGui::RadioButton("Allow if", &facingConditionMode, 0))
+		{
+			b.facingConditionMode = settings::FacingConditionMode::AllowIf;
+		}
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Allow if not", &facingConditionMode, 1))
+		{
+			b.facingConditionMode = settings::FacingConditionMode::AllowIfNot;
+		}
+
+		bool useLookAt = settings::hasGestureModifier(
+			b.facingModifiers, settings::GestureModifier::LookingAtHand);
 		if (ImGui::Checkbox("Look At Hand", &useLookAt))
 		{
 			settings::setGestureModifier(
-				b.modifiers, settings::GestureModifier::LookingAtHand, useLookAt);
+				b.facingModifiers, settings::GestureModifier::LookingAtHand, useLookAt);
 			if (!useLookAt)
 			{
-				settings::setInvertedGestureModifier(
-					b.invertedModifiers, settings::GestureModifier::LookingAtHand, false);
+				settings::setGestureModifier(b.invertedFacingModifiers,
+										 settings::GestureModifier::LookingAtHand,
+										 false);
 			}
 		}
 		if (useLookAt)
@@ -1129,49 +1154,26 @@ void HOL::UserInterface::buildBindings()
 			ImGui::TextDisabled("(%.1f deg)", Config.input.lookAtFovDegrees);
 			ImGui::SameLine();
 			bool invertLookAt = settings::hasGestureModifier(
-				b.invertedModifiers, settings::GestureModifier::LookingAtHand);
+				b.invertedFacingModifiers, settings::GestureModifier::LookingAtHand);
 			if (rightAlignCheckbox("Invert##LookAtHand", &invertLookAt))
 			{
-				settings::setInvertedGestureModifier(
-					b.invertedModifiers, settings::GestureModifier::LookingAtHand, invertLookAt);
+				settings::setGestureModifier(b.invertedFacingModifiers,
+										 settings::GestureModifier::LookingAtHand,
+										 invertLookAt);
 			}
 		}
 
-		bool useInView
-			= settings::hasGestureModifier(b.modifiers, settings::GestureModifier::InView);
-		if (ImGui::Checkbox("In View", &useInView))
-		{
-			settings::setGestureModifier(b.modifiers, settings::GestureModifier::InView, useInView);
-			if (!useInView)
-			{
-				settings::setInvertedGestureModifier(
-					b.invertedModifiers, settings::GestureModifier::InView, false);
-			}
-		}
-		if (useInView)
-		{
-			ImGui::SameLine();
-			ImGui::TextDisabled("(%.1f deg)", Config.input.inViewFovDegrees);
-			ImGui::SameLine();
-			bool invertInView = settings::hasGestureModifier(
-				b.invertedModifiers, settings::GestureModifier::InView);
-			if (rightAlignCheckbox("Invert##InView", &invertInView))
-			{
-				settings::setInvertedGestureModifier(
-					b.invertedModifiers, settings::GestureModifier::InView, invertInView);
-			}
-		}
-
-		bool usePalmFacing
-			= settings::hasGestureModifier(b.modifiers, settings::GestureModifier::PalmFacingUser);
+		bool usePalmFacing = settings::hasGestureModifier(
+			b.facingModifiers, settings::GestureModifier::PalmFacingUser);
 		if (ImGui::Checkbox("Palm Facing User", &usePalmFacing))
 		{
 			settings::setGestureModifier(
-				b.modifiers, settings::GestureModifier::PalmFacingUser, usePalmFacing);
+				b.facingModifiers, settings::GestureModifier::PalmFacingUser, usePalmFacing);
 			if (!usePalmFacing)
 			{
-				settings::setInvertedGestureModifier(
-					b.invertedModifiers, settings::GestureModifier::PalmFacingUser, false);
+				settings::setGestureModifier(b.invertedFacingModifiers,
+										 settings::GestureModifier::PalmFacingUser,
+										 false);
 			}
 		}
 		if (usePalmFacing)
@@ -1180,12 +1182,12 @@ void HOL::UserInterface::buildBindings()
 			ImGui::TextDisabled("(%.1f deg)", Config.input.palmFacingFovDegrees);
 			ImGui::SameLine();
 			bool invertPalmFacing = settings::hasGestureModifier(
-				b.invertedModifiers, settings::GestureModifier::PalmFacingUser);
+				b.invertedFacingModifiers, settings::GestureModifier::PalmFacingUser);
 			if (rightAlignCheckbox("Invert##PalmFacingUser", &invertPalmFacing))
 			{
-				settings::setInvertedGestureModifier(b.invertedModifiers,
-													 settings::GestureModifier::PalmFacingUser,
-													 invertPalmFacing);
+				settings::setGestureModifier(b.invertedFacingModifiers,
+										 settings::GestureModifier::PalmFacingUser,
+										 invertPalmFacing);
 			}
 		}
 

@@ -203,6 +203,12 @@ namespace HOL
 			PalmFacingUser = 1 << 4
 		};
 
+		enum class FacingConditionMode
+		{
+			AllowIf = 0,
+			AllowIfNot
+		};
+
 		inline bool hasGestureModifier(uint32_t modifiers, GestureModifier modifier)
 		{
 			return (modifiers & static_cast<uint32_t>(modifier)) != 0;
@@ -217,20 +223,6 @@ namespace HOL
 			else
 			{
 				modifiers &= ~static_cast<uint32_t>(modifier);
-			}
-		}
-
-		inline void setInvertedGestureModifier(uint32_t& invertedModifiers,
-											   GestureModifier modifier,
-											   bool enabled)
-		{
-			if (enabled)
-			{
-				invertedModifiers |= static_cast<uint32_t>(modifier);
-			}
-			else
-			{
-				invertedModifiers &= ~static_cast<uint32_t>(modifier);
 			}
 		}
 
@@ -282,8 +274,10 @@ namespace HOL
 			std::array<HOL::FingerType, MaxChainLength> chainFingers
 				= {HOL::FingerIndex, HOL::FingerMiddle, HOL::FingerRing, HOL::FingerLittle};
 			int chainLength = MaxChainLength;
-			uint32_t modifiers = 0;			// Gesture modifiers.
-			uint32_t invertedModifiers = 0; // Modifiers whose output should be inverted.
+			uint32_t modifiers = 0; // Standalone gesture modifiers.
+			uint32_t facingModifiers = 0; // Facing conditions combined as a group.
+			uint32_t invertedFacingModifiers = 0; // Conditions inverted before grouping.
+			FacingConditionMode facingConditionMode = FacingConditionMode::AllowIf;
 
 			// Output target — determines action/sink type.
 			InputTarget target = InputTarget::None;
@@ -414,7 +408,7 @@ namespace HOL
 
 		struct HandOfLesserSettings
 		{
-			static constexpr int CurrentVersion = 2;
+			static constexpr int CurrentVersion = 3;
 
 			int version = CurrentVersion;
 			GeneralSettings general;

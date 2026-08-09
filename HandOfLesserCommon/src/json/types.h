@@ -197,7 +197,9 @@ namespace HOL
 				 {"chainFingers", binding.chainFingers},
 				 {"chainLength", binding.chainLength},
 				 {"modifiers", binding.modifiers},
-				 {"invertedModifiers", binding.invertedModifiers},
+				 {"facingModifiers", binding.facingModifiers},
+				 {"invertedFacingModifiers", binding.invertedFacingModifiers},
+				 {"facingConditionMode", binding.facingConditionMode},
 				 {"target", binding.target},
 				 {"pressAndRelease", binding.pressAndRelease}};
 		}
@@ -211,7 +213,10 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "chainFingers", binding.chainFingers);
 			nlohmann::get_to_if_present(j, "chainLength", binding.chainLength);
 			nlohmann::get_to_if_present(j, "modifiers", binding.modifiers);
-			nlohmann::get_to_if_present(j, "invertedModifiers", binding.invertedModifiers);
+			nlohmann::get_to_if_present(j, "facingModifiers", binding.facingModifiers);
+			nlohmann::get_to_if_present(
+				j, "invertedFacingModifiers", binding.invertedFacingModifiers);
+			nlohmann::get_to_if_present(j, "facingConditionMode", binding.facingConditionMode);
 			nlohmann::get_to_if_present(j, "target", binding.target);
 			nlohmann::get_to_if_present(j, "pressAndRelease", binding.pressAndRelease);
 		}
