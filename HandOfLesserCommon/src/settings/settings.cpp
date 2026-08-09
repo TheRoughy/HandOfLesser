@@ -19,7 +19,15 @@ namespace HOL::settings
 			b.kind = GestureKind::Proximity;
 			b.proximityFinger = HOL::FingerMiddle;
 			b.target = InputTarget::Joystick;
-			addBinding(b);
+			// The left joystick is commonly dragged from outside the visible FoV.
+			if (b.side == HOL::LeftHand)
+			{
+				bindings.push_back(b);
+			}
+			else
+			{
+				addBinding(b);
+			}
 		}
 
 		// Trigger — Both hands, standard Index pinch
