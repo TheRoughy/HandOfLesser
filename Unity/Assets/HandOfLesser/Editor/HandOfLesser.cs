@@ -11,6 +11,8 @@ public class HandOfLesserAnimationGenerator : EditorWindow
     static TransmitType sTransmitType = TransmitType.packed;
 
     static float sSmoothingTimeMS = 100.0f;
+    static float sFullStepSmoothingTimeMS = 250.0f;
+    static float sHalfStepSmoothingTimeMS = 500.0f;
 
     static GameObject sTargetAvatar = null;
     static bool sUseSkeletal = false;
@@ -31,6 +33,22 @@ public class HandOfLesserAnimationGenerator : EditorWindow
                     "Smoothing time (ms):",
                     "Time for networked finger movement to reach approximately 95% of its target. Use 0 to disable smoothing."),
                 sSmoothingTimeMS));
+
+        sFullStepSmoothingTimeMS = Mathf.Max(
+            sSmoothingTimeMS,
+            EditorGUILayout.FloatField(
+                new GUIContent(
+                    "Full-step smoothing time (ms):",
+                    "Smoothing time used when consecutive networked targets differ by one full step."),
+                sFullStepSmoothingTimeMS));
+
+        sHalfStepSmoothingTimeMS = Mathf.Max(
+            sFullStepSmoothingTimeMS,
+            EditorGUILayout.FloatField(
+                new GUIContent(
+                    "Half-step smoothing time (ms):",
+                    "Smoothing time used when consecutive networked targets differ by one interlaced half-step."),
+                sHalfStepSmoothingTimeMS));
 
         sTargetAvatar = (GameObject) EditorGUILayout.ObjectField("Avatar:", sTargetAvatar, typeof(GameObject), true);
 
@@ -103,6 +121,9 @@ public class HandOfLesserAnimationGenerator : EditorWindow
                 {
                     addAnimatorLayer(controller, ControllerLayer.interlaceWeigh, 1, bothHandsMask);
                     addAnimatorLayer(controller, ControllerLayer.interlateOutput, 1, bothHandsMask);
+                    addAnimatorLayer(controller, ControllerLayer.targetHistory, 1, bothHandsMask);
+                    addAnimatorLayer(controller, ControllerLayer.targetDifference, 1, bothHandsMask);
+                    addAnimatorLayer(controller, ControllerLayer.smoothingMode, 1, bothHandsMask);
                 }
 
                 break;
@@ -130,6 +151,9 @@ public class HandOfLesserAnimationGenerator : EditorWindow
                 {
                     InterlacedWeigh.populateWeighLayer(controller);
                     InterlacedCombine.populateCombineLayer(controller);
+                    InterlacedBuffer.populateTargetHistoryLayer(controller);
+                    InterlacedWeigh.populateTargetDifferenceLayer(controller);
+                    Smoothing.populateSmoothingModeLayer(controller);
                 }
                 break;
             default:
@@ -137,9 +161,13 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         }
         FrameRateMeasure.populateFpsMeasureLayer(controller);
         FrameRateMeasure.populateFpsSmoothingLayer(controller);
-        SmoothingAdjustment.populateSmoothingAdjustmentLayer(controller, sSmoothingTimeMS);
+        SmoothingAdjustment.populateSmoothingAdjustmentLayer(
+            controller,
+            sSmoothingTimeMS,
+            sFullStepSmoothingTimeMS,
+            sHalfStepSmoothingTimeMS);
         DirectInput.populateLayer(controller);
-        Smoothing.populateSmoothingLayer(controller);
+        Smoothing.populateSmoothingLayer(controller, transmitType == TransmitType.packed && sUseInterlace);
         FingerBend.populateFingerJointLayer(controller, sUseSkeletal);
 
         ProgressDisplay.clearProgress();
@@ -232,6 +260,7 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         {
             InterlacedBuffer.addParameters(controller);
             InterlacedWeigh.addParameters(controller);
+            Smoothing.addSmoothingModeParameters(controller);
         }
 
         FrameRateMeasure.addParameters(controller);
@@ -276,6 +305,8 @@ public class HandOfLesserAnimationGenerator : EditorWindow
                         {
                             InterlacedWeigh.generateAnimations();
                             InterlacedCombine.generateAnimations();
+                            InterlacedBuffer.generateAnimations();
+                            Smoothing.generateSmoothingModeAnimations();
                         }
                         break;
                     }

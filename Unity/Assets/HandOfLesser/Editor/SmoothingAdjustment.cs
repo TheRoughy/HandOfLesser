@@ -27,7 +27,9 @@ namespace HOL
                 frameTimeMS / smoothingTimeMS);
         }
 
-        private static void generateSmoothingAdjustmentAnimations(float smoothingTimeMS)
+        private static void generateSmoothingAdjustmentAnimations(
+            float smoothingTimeMS,
+            PropertyType outputProperty)
         {
             // Each animation contains the old-output weight needed at one frame rate. Interpolating
             // between them keeps the filter's real-time response stable as avatar FPS changes.
@@ -38,21 +40,24 @@ namespace HOL
                 AnimationClip clip = new AnimationClip();
                 ClipTools.setClipProperty(
                     ref clip,
-                    Resources.getParameterName(PropertyType.smoothing_adjusted),
+                    Resources.getParameterName(outputProperty),
                     retention);
                 ClipTools.saveClip(
                     clip,
                     HOL.Resources.getAnimationOutputPath(
-                        PropertyType.smoothing_adjusted,
+                        outputProperty,
                         frameRate));
             }
         }
 
-        private static void addParameter(AnimatorController controller, float smoothingTimeMS)
+        private static void addParameter(
+            AnimatorController controller,
+            float smoothingTimeMS,
+            PropertyType property)
         {
             controller.AddParameter(new AnimatorControllerParameter()
             {
-                name = Resources.getParameterName(PropertyType.smoothing_adjusted),
+                name = Resources.getParameterName(property),
                 type = AnimatorControllerParameterType.Float,
                 defaultFloat = calculateRetentionFactor(smoothingTimeMS, 60.0f)
             });
@@ -60,12 +65,13 @@ namespace HOL
 
         private static BlendTree generateSmoothingAdjustmentBlendTree(
             BlendTree parent,
-            List<ChildMotion> childTrees)
+            List<ChildMotion> childTrees,
+            PropertyType outputProperty)
         {
             BlendTree tree = new BlendTree();
             AssetDatabase.AddObjectToAsset(tree, parent);
             tree.blendType = BlendTreeType.Simple1D;
-            tree.name = HOL.Resources.getParameterName(PropertyType.fps_smooth);
+            tree.name = HOL.Resources.getParameterName(outputProperty);
             tree.useAutomaticThresholds = false;
             tree.blendParameter = HOL.Resources.getParameterName(PropertyType.fps_smooth);
             tree.hideFlags = HideFlags.HideInHierarchy;
@@ -82,7 +88,7 @@ namespace HOL
                 float frameTime = 1.0f / frameRate;
                 AnimationClip animation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
                     HOL.Resources.getAnimationOutputPath(
-                        PropertyType.smoothing_adjusted,
+                        outputProperty,
                         frameRate));
 
                 tree.AddChild(animation, frameTime);
@@ -93,12 +99,33 @@ namespace HOL
 
         public static void populateSmoothingAdjustmentLayer(
             AnimatorController controller,
-            float smoothingTimeMS)
+            float smoothingTimeMS,
+            float fullStepSmoothingTimeMS,
+            float halfStepSmoothingTimeMS)
         {
             AnimatorControllerLayer layer = ControllerLayer.smoothingAdjustment.findLayer(controller);
 
-            generateSmoothingAdjustmentAnimations(smoothingTimeMS);
-            addParameter(controller, smoothingTimeMS);
+            generateSmoothingAdjustmentAnimations(
+                smoothingTimeMS,
+                PropertyType.smoothing_adjusted);
+            generateSmoothingAdjustmentAnimations(
+                fullStepSmoothingTimeMS,
+                PropertyType.smoothing_full_step_adjusted);
+            generateSmoothingAdjustmentAnimations(
+                halfStepSmoothingTimeMS,
+                PropertyType.smoothing_half_step_adjusted);
+            addParameter(
+                controller,
+                smoothingTimeMS,
+                PropertyType.smoothing_adjusted);
+            addParameter(
+                controller,
+                fullStepSmoothingTimeMS,
+                PropertyType.smoothing_full_step_adjusted);
+            addParameter(
+                controller,
+                halfStepSmoothingTimeMS,
+                PropertyType.smoothing_half_step_adjusted);
 
             // Full local OSC bypasses network smoothing, so this layer can idle in that mode.
             AnimatorState disabledState = layer.stateMachine.AddState("HOLSmoothingAdjustmentDisabled");
@@ -117,7 +144,18 @@ namespace HOL
             rootState.motion = rootBlendtree;
 
             List<ChildMotion> childTrees = new List<ChildMotion>();
-            generateSmoothingAdjustmentBlendTree(rootBlendtree, childTrees);
+            generateSmoothingAdjustmentBlendTree(
+                rootBlendtree,
+                childTrees,
+                PropertyType.smoothing_adjusted);
+            generateSmoothingAdjustmentBlendTree(
+                rootBlendtree,
+                childTrees,
+                PropertyType.smoothing_full_step_adjusted);
+            generateSmoothingAdjustmentBlendTree(
+                rootBlendtree,
+                childTrees,
+                PropertyType.smoothing_half_step_adjusted);
             rootBlendtree.children = childTrees.ToArray();
 
             AnimatorStateTransition transition = rootState.AddTransition(disabledState);

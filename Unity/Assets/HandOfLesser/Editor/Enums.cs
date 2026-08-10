@@ -38,7 +38,10 @@ namespace HOL
         directInput, // Copies raw full input to smooth when local full is enabled
         smoothing, 
         interlaceWeigh,
-        interlateOutput, 
+        interlateOutput,
+        targetHistory,
+        targetDifference,
+        smoothingMode,
         bend,
         fpsMeasure,
         fpsSmoothing,
@@ -56,6 +59,10 @@ namespace HOL
         input_interlaced_first,     // Used to store prev/current interlaced value
         input_interlaced_second,    // we flip-flop between the two, so either may be current or prev.
         interlaced_weight,          // distance between current and past interlaced input
+        input_target_first,         // Alternating buffers containing consecutive reconstructed targets
+        input_target_second,
+        target_difference,          // Half of the difference between the current and previous target
+        smoothing_mode,             // Persists the smoothing selected by the last target movement
         smooth,     // Output used for smoothing, used to drive avatarRig
         avatarRig,  // Humanoid rig or skeletal
         avatarRigCombined,   // Contains both curl and splay in a single animation
@@ -64,6 +71,8 @@ namespace HOL
         fps,            // Raw time between Animator evaluations
         fps_smooth,     // Measured frame time is unstable, so smooth it before use
         smoothing_adjusted, // Per-frame retention adjusted to the current frame time
+        smoothing_full_step_adjusted,
+        smoothing_half_step_adjusted,
     }
 
     enum AnimationClipPosition
@@ -176,6 +185,9 @@ namespace HOL
                 case ControllerLayer.bend:              return "HOL_bend";
                 case ControllerLayer.interlaceWeigh:    return "HOL_interlaceWeigh";
                 case ControllerLayer.interlateOutput:   return "HOL_interlaceOutput";
+                case ControllerLayer.targetHistory:     return "HOL_targetHistory";
+                case ControllerLayer.targetDifference:  return "HOL_targetDifference";
+                case ControllerLayer.smoothingMode: return "HOL_smoothingMode";
                 case ControllerLayer.fpsMeasure:        return "HOL_fpsMeasure";
                 case ControllerLayer.fpsSmoothing:      return "HOL_fpsSmoothing";
                 case ControllerLayer.smoothingAdjustment: return "HOL_smoothingAdjustment";
@@ -216,11 +228,17 @@ namespace HOL
                 case PropertyType.input_interlaced_first: return "inputInterlacedFirst";
                 case PropertyType.input_interlaced_second: return "inputInterlacedSecond";
                 case PropertyType.interlaced_weight: return "interlacedWeight";
+                case PropertyType.input_target_first: return "inputTargetFirst";
+                case PropertyType.input_target_second: return "inputTargetSecond";
+                case PropertyType.target_difference: return "targetDifference";
+                case PropertyType.smoothing_mode: return "smoothingMode";
                 case PropertyType.fps_time: return "fpsTime";
                 case PropertyType.fps_previous: return "fpsPrevious";
                 case PropertyType.fps: return "fps";
                 case PropertyType.fps_smooth: return "fpsSmooth";
                 case PropertyType.smoothing_adjusted: return "smoothingAdjusted";
+                case PropertyType.smoothing_full_step_adjusted: return "smoothingFullStepAdjusted";
+                case PropertyType.smoothing_half_step_adjusted: return "smoothingHalfStepAdjusted";
                 default:
                     return "";
             }
