@@ -1,9 +1,4 @@
-﻿using HOL;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -14,8 +9,6 @@ namespace HOL
     {
         public static readonly int SMOOTHING_BLENDTREE_COUNT = AnimationValues.TOTAL_JOINT_COUNT; // Bend joints ( including splay ) * fingers * hands
         public static readonly int SMOOTHING_ANIMATION_COUNT = SMOOTHING_BLENDTREE_COUNT * 2; // Positive and negative animation for each
-
-        private static bool sAdjustSmoothingToFramerate = false;
 
         public static int generateSmoothingAnimation(HandSide side, FingerType finger, FingerBendType joint, AnimationClipPosition position)
         {
@@ -68,10 +61,8 @@ namespace HOL
 
         public static int generateSmoothingBlendtree(BlendTree parent, List<ChildMotion> childTrees, HandSide side, FingerType finger, FingerBendType joint)
         {
-            // So we have 3 blend trees.
-            // 1. Takes the original input value and blends between animations setting the proxy value to -1 / 1
-            // 2. Takes the proxy value and does the same
-            // 3. Blends between 1 and 2 according to REMOTE_SMOOTHING_PARAMETER_NAME. There'll be a local one too eventually.
+            // Blend the current input with the previous smoothed output. The global smoothing
+            // amount is adjusted for the current frame time so every joint has the same response.
 
             // #3
             BlendTree tree = new BlendTree();
@@ -79,7 +70,7 @@ namespace HOL
             tree.blendType = BlendTreeType.Simple1D;
             tree.name = HOL.Resources.getJointParameterName(side, finger, joint, PropertyType.input);
             tree.useAutomaticThresholds = false;    // Automatic probably would work fine
-            tree.blendParameter = HOL.Resources.getJointParameterName(side, finger, joint, PropertyType.smoothing_individual);
+            tree.blendParameter = HOL.Resources.getParameterName(PropertyType.smoothing_adjusted);
             tree.hideFlags = HideFlags.HideInHierarchy;
 
             // In order to see the DirectBlendParamter required for the parent Direct blendtree, we need to use a ChildMotion,.
@@ -99,9 +90,8 @@ namespace HOL
             return 1;
         }
 
-        public static void populateSmoothingLayer(AnimatorController controller, bool adjustSmoothingToFramerate)
+        public static void populateSmoothingLayer(AnimatorController controller)
         {
-            sAdjustSmoothingToFramerate = adjustSmoothingToFramerate; // rather than add it to be a bunch of functions
             AnimatorControllerLayer layer = ControllerLayer.smoothing.findLayer(controller);
 
             // When UseFull is active, HOL_directInput writes smooth directly instead.

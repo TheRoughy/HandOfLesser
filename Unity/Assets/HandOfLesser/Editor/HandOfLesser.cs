@@ -10,12 +10,9 @@ public class HandOfLesserAnimationGenerator : EditorWindow
 {
     static TransmitType sTransmitType = TransmitType.packed;
 
-    // This depends on framerate, so we need to figure out something for that.
-    static float sSmoothing = 0.45f;
-    static float sMaxSmoothing = 0.90f;
+    static float sSmoothingTimeMS = 100.0f;
 
     static GameObject sTargetAvatar = null;
-    static bool sAdjustSmoothingToFramerate = true;
     static bool sUseSkeletal = false;
     static bool sUseInterlace = true;
 
@@ -27,14 +24,17 @@ public class HandOfLesserAnimationGenerator : EditorWindow
 
     private void OnGUI()
     {
-        sSmoothing = EditorGUILayout.FloatField("Smoothing:", sSmoothing);
-        sMaxSmoothing = EditorGUILayout.FloatField("Max smoothing:", sMaxSmoothing);
+        sSmoothingTimeMS = Mathf.Max(
+            0.0f,
+            EditorGUILayout.FloatField(
+                new GUIContent(
+                    "Smoothing time (ms):",
+                    "Time for networked finger movement to reach approximately 95% of its target. Use 0 to disable smoothing."),
+                sSmoothingTimeMS));
 
         sTargetAvatar = (GameObject) EditorGUILayout.ObjectField("Avatar:", sTargetAvatar, typeof(GameObject), true);
 
         // sUseSkeletal = EditorGUILayout.Toggle("Use skeletal: ", sUseSkeletal);
-
-        sAdjustSmoothingToFramerate = EditorGUILayout.Toggle("Adjust smoothing to framrate: ", sAdjustSmoothingToFramerate);
 
         if (GUILayout.Button("Generate Animations"))
         {
@@ -113,8 +113,6 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         // Local full bypasses the normal smoothing stack and copies its dedicated raw params
         // straight into smooth through this layer.
         addAnimatorLayer(controller, ControllerLayer.directInput, 1, bothHandsMask);
-        addAnimatorLayer(controller, ControllerLayer.smoothingWeigh, 1, bothHandsMask);
-        addAnimatorLayer(controller, ControllerLayer.smoothingIndividual, 1, bothHandsMask);
         addAnimatorLayer(controller, ControllerLayer.smoothing, 1, bothHandsMask);
         addAnimatorLayer(controller, ControllerLayer.bend, 1, bothHandsMask);
     }
@@ -139,11 +137,9 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         }
         FrameRateMeasure.populateFpsMeasureLayer(controller);
         FrameRateMeasure.populateFpsSmoothingLayer(controller);
-        SmoothingAdjustment.populateFpsSmoothingLayer(controller, sSmoothing, sMaxSmoothing);
+        SmoothingAdjustment.populateSmoothingAdjustmentLayer(controller, sSmoothingTimeMS);
         DirectInput.populateLayer(controller);
-        SmoothingWeigh.populateWeighLayer(controller);
-        Smoothing.populateSmoothingLayer(controller, sAdjustSmoothingToFramerate);
-        SmoothingIndividual.populateSmoothingIndividualLayer(controller);
+        Smoothing.populateSmoothingLayer(controller);
         FingerBend.populateFingerJointLayer(controller, sUseSkeletal);
 
         ProgressDisplay.clearProgress();
@@ -271,8 +267,6 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         {
             FingerBend.generateAnimations(sTargetAvatar, sUseSkeletal);
             Smoothing.generateAnimations();
-            SmoothingIndividual.generateAnimations();
-            SmoothingWeigh.generateAnimations();
             switch (transmitType)
             {
                 case TransmitType.packed:
