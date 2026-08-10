@@ -37,8 +37,7 @@ namespace HOL
         inputPacked, 
         directInput, // Copies raw full input to smooth when local full is enabled
         smoothing, 
-        interlacePopulate, 
-        interlaceWeigh, 
+        interlaceWeigh,
         interlateOutput, 
         bend,
         fpsMeasure,
@@ -53,9 +52,6 @@ namespace HOL
         OSC_Full,       // Local-only raw full input. Do not reuse internal working params for this.
         OSC_Alternating,      
         OSC_Packed,     // We will use packed for network and full for local, so need to separate them
-        OSC_Packed_first,      // for interlacing
-        OSC_Packed_second,     // for interlacing
-
         input_packed,       // used for animation name because we need to do non-standard values
         input,              // full joint path with left/right qualified
         input_interlaced,           // same as above, but values can alternate to signify in-between value
@@ -182,7 +178,6 @@ namespace HOL
                 case ControllerLayer.directInput:       return "HOL_directInput";
                 case ControllerLayer.smoothing:         return "HOL_smoothing";
                 case ControllerLayer.bend:              return "HOL_bend";
-                case ControllerLayer.interlacePopulate: return "HOL_interlacePopulate";
                 case ControllerLayer.interlaceWeigh:    return "HOL_interlaceWeigh";
                 case ControllerLayer.interlateOutput:   return "HOL_interlaceOutput";
                 case ControllerLayer.fpsMeasure:        return "HOL_fpsMeasure";
@@ -218,8 +213,6 @@ namespace HOL
                 case PropertyType.OSC_Full: return "full"; // Raw local full path, kept separate from Animator-owned params
                 case PropertyType.OSC_Alternating: return "alternating";
                 case PropertyType.OSC_Packed: return "packed";
-                case PropertyType.OSC_Packed_first: return "packed_first";
-                case PropertyType.OSC_Packed_second: return "packed_second";
                 case PropertyType.input: return "input";
                 case PropertyType.input_packed: return "input"; // only used for animation clip names, drive input
                 case PropertyType.smooth: return "smooth";

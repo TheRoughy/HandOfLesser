@@ -697,8 +697,8 @@ void HOL::HandOfLesserCore::sendOscData()
 
 	size_t size = 0;
 
-	// Always send full, expect when testing remote stuff locally because it will break things
-	if (Config.vrchat.sendFull)
+	// Full data normally drives the local avatar; preview mode exercises the networked path instead.
+	if (Config.vrchat.shouldUseFullData())
 	{
 		size = this->mVrchatOSC.generateOscBundleFull();
 		this->mOscTransport.send(this->mVrchatOSC.getPacketBuffer(), size);

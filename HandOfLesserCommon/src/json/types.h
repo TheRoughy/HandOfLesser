@@ -105,6 +105,7 @@ namespace HOL
 		{
 			j = {{"sendOsc", settings.sendOsc},
 				 {"sendFull", settings.sendFull},
+				 {"previewInterlaced", settings.previewInterlaced},
 				 {"sendAlternating", settings.sendAlternating},
 				 {"sendPacked", settings.sendPacked},
 				 {"interlacePacked", settings.interlacePacked},
@@ -120,6 +121,7 @@ namespace HOL
 		{
 			nlohmann::get_to_if_present(j, "sendOsc", settings.sendOsc);
 			nlohmann::get_to_if_present(j, "sendFull", settings.sendFull);
+			nlohmann::get_to_if_present(j, "previewInterlaced", settings.previewInterlaced);
 			nlohmann::get_to_if_present(j, "sendAlternating", settings.sendAlternating);
 			nlohmann::get_to_if_present(j, "sendPacked", settings.sendPacked);
 			nlohmann::get_to_if_present(j, "interlacePacked", settings.interlacePacked);

@@ -137,6 +137,7 @@ namespace HOL
 		{
 			bool sendOsc = true;
 			bool sendFull = true;
+			bool previewInterlaced = false;
 			bool sendAlternating = false;
 			bool sendPacked = true;
 
@@ -153,6 +154,11 @@ namespace HOL
 			bool alternateCurlTest = false; // flip between -1 and 1 every 100ms
 			float curlDebug = 0;
 			float splayDebug = 0;
+
+			bool shouldUseFullData() const
+			{
+				return sendFull && !previewInterlaced;
+			}
 		};
 
 		struct VisualizerSettings

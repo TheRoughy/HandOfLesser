@@ -9,42 +9,46 @@ using UnityEngine;
 
 namespace HOL
 {
+    // Each packed OSC parameter contains the same joint from both hands. The upper four bits hold
+    // the left hand and the lower four bits hold the right hand. Separate blend trees decode both
+    // values back into the -1 to +1 range used by the rest of the animation controller.
     class Packed
     {
         private static readonly int STEP_COUNT = 16; // 4 bits worth
-        private static readonly int PACKED_BLENDTREE_COUNT = AnimationValues.TOTAL_JOINT_COUNT * 2; // all joints for both hands
-
         private static readonly int PACKED_ANIMATION_COUNT_RIGHT = AnimationValues.TOTAL_JOINT_COUNT / 2; // neg/pos for each joint on one hand
         private static readonly int PACKED_ANIMATION_COUNT_LEFT = (AnimationValues.TOTAL_JOINT_COUNT / 2 ) * STEP_COUNT; // 16 steps for each joint on one hand
 
         private static readonly int PACKED_ANIMATION_COUNT = PACKED_ANIMATION_COUNT_RIGHT + PACKED_ANIMATION_COUNT_LEFT;
         private static readonly int PACKED_VALUE_COUNT = 256;    // Max an 8bit int can store
 
-        private static int generateSingleBlendTree(BlendTree parent, List<ChildMotion> childTrees, HandSide side, FingerType finger, FingerBendType joint, PropertyType inputProperty, PropertyType outputProperty)
+        private static BlendTree generateDecodeTree(
+            BlendTree parent,
+            HandSide side,
+            FingerType finger,
+            FingerBendType joint,
+            PropertyType outputProperty)
         {
+            // outputProperty determines whether this decoder writes the live value or one of the
+            // two retained interlace samples. All three are decoded from the same packed input.
             BlendTree tree = new BlendTree();
             AssetDatabase.AddObjectToAsset(tree, parent);
 
-            tree.name = HOL.Resources.getJointParameterName(null, finger, joint, PropertyType.OSC_Packed);
+            tree.name = HOL.Resources.getJointParameterName(side, finger, joint, outputProperty);
             tree.blendType = BlendTreeType.Simple1D;
-            tree.useAutomaticThresholds = false;    
-            tree.blendParameter = HOL.Resources.getJointParameterName(null, finger, joint, inputProperty);
-
-            childTrees.Add(new ChildMotion()
-            {
-                directBlendParameter = HOL.Resources.ALWAYS_1_PARAMETER,
-                motion = tree,
-                timeScale = 1,
-            });
+            tree.useAutomaticThresholds = false;
+            tree.blendParameter = HOL.Resources.getJointParameterName(
+                null,
+                finger,
+                joint,
+                PropertyType.OSC_Packed);
+            tree.hideFlags = HideFlags.HideInHierarchy;
 
             if (side == HandSide.left)
             {
-                // 0-15 -> 0
-                // 16-31 -> 1
-                // Repeat.
-                // Right denotes the left step animation that each section will paly.
-                // You only need to set the threshold at the beginning and the end,
-                // so 0 and 15 for the first step
+                // The left-hand value is the upper nibble, so it remains unchanged for each block
+                // of 16 packed values: 0-15 is step 0, 16-31 is step 1, and so on. Adding the same
+                // clip at both ends of each block prevents Unity from interpolating while the
+                // right-hand nibble changes inside that block.
 
                 for (int i = 0; i < STEP_COUNT; i++)
                 {
@@ -69,12 +73,9 @@ namespace HOL
             }
             else
             {
-                // 0 - negative 
-                // 15 - positive
-                // 16 - negative
-                // 31 - positive
-                // Repeat 16 times
-                // This extracts the interleaved values for the right hand
+                // The right-hand value is the lower nibble, so it ramps from -1 to +1 over every
+                // block of 16 packed values. Repeating the same two endpoints for all 16 blocks
+                // discards the upper nibble and extracts only the right-hand value.
 
                 for (int i = 0; i < PACKED_VALUE_COUNT; i+=STEP_COUNT)
                 {
@@ -98,22 +99,67 @@ namespace HOL
                 }
             }
 
-            return 1;
+            return tree;
         }
 
-        public static void populatePackedLayer(AnimatorController controller)
+        private static void addDirectChild(List<ChildMotion> childTrees, Motion motion)
+        {
+            // Every joint decoder must run at full weight at the same time. Unity only exposes the
+            // Direct Blend parameter when children are assigned as ChildMotion values, so collect
+            // them here and assign the completed array to the root tree below.
+            childTrees.Add(new ChildMotion()
+            {
+                directBlendParameter = HOL.Resources.ALWAYS_1_PARAMETER,
+                motion = motion,
+                timeScale = 1,
+            });
+        }
+
+        private static void addBufferedDecodeTree(
+            BlendTree root,
+            List<ChildMotion> childTrees,
+            HandSide side,
+            FingerType finger,
+            FingerBendType joint,
+            PropertyType bufferProperty,
+            bool updateWhenBitIsSet)
+        {
+            // The update decoder writes the current packed sample into this buffer. The surrounding
+            // latch switches between that decoder and a self-feedback tree based on the interlace
+            // bit, allowing the other buffer to retain the preceding sample.
+            BlendTree updateTree = generateDecodeTree(
+                root,
+                side,
+                finger,
+                joint,
+                bufferProperty);
+            BlendTree latchTree = InterlacedBuffer.generateLatchTree(
+                root,
+                updateTree,
+                side,
+                finger,
+                joint,
+                bufferProperty,
+                updateWhenBitIsSet);
+
+            addDirectChild(childTrees, latchTree);
+        }
+
+        public static void populatePackedLayer(AnimatorController controller, bool interlaced)
         {
             AnimatorControllerLayer layer = ControllerLayer.inputPacked.findLayer(controller);
 
+            // Full local OSC bypasses this layer. The packed state contains one Direct Blend Tree
+            // so all joint decoders and interlace buffers can be evaluated together.
             AnimatorState disabledState = layer.stateMachine.AddState("HOLPackedDisabled");
             disabledState.writeDefaultValues = true;
 
-            // State within this controller. TODO: attach to stuff
             AnimatorState rootState = layer.stateMachine.AddState("HOLPacked");
             rootState.writeDefaultValues = true; // Must be true or values are multiplied depending on umber of blendtrees in controller!?!?!
             layer.stateMachine.defaultState = rootState;
 
-            // Blendtree at the root of our state
+            // The root has one child per live joint value, plus two buffered children per joint
+            // when interlacing is enabled. Each child writes a different Animator parameter.
             BlendTree rootBlendtree = new BlendTree();
             AssetDatabase.AddObjectToAsset(rootBlendtree, rootState);
 
@@ -125,28 +171,55 @@ namespace HOL
             rootState.motion = rootBlendtree;
 
             int blendtreesProcessed = 0;
-            ProgressDisplay.updateBlendtreeProgress(blendtreesProcessed, PACKED_BLENDTREE_COUNT);
+            int blendtreeCount = AnimationValues.TOTAL_JOINT_COUNT * (interlaced ? 3 : 1);
+            ProgressDisplay.updateBlendtreeProgress(blendtreesProcessed, blendtreeCount);
 
             // Cannot add directly to parent tree, see generateSmoothingBlendtree()
             List<ChildMotion> childTrees = new List<ChildMotion>();
 
-            // We now repeat this for interlaced, first and second using different inputs and writing to different outputs
             foreach (FingerType finger in new FingerType().Values())
             {
                 foreach (FingerBendType joint in new FingerBendType().Values())
                 {
-                    // interlaced
-                    blendtreesProcessed += generateSingleBlendTree(rootBlendtree, childTrees, HandSide.left, finger, joint, PropertyType.OSC_Packed, PropertyType.input_interlaced);
-                    blendtreesProcessed += generateSingleBlendTree(rootBlendtree, childTrees, HandSide.right, finger, joint, PropertyType.OSC_Packed, PropertyType.input_interlaced);
+                    PropertyType liveOutput = interlaced
+                        ? PropertyType.input_interlaced
+                        : PropertyType.input;
 
-                    // interlaced_first
-                    blendtreesProcessed += generateSingleBlendTree(rootBlendtree, childTrees, HandSide.left, finger, joint, PropertyType.OSC_Packed_first, PropertyType.input_interlaced_first);
-                    blendtreesProcessed += generateSingleBlendTree(rootBlendtree, childTrees, HandSide.right, finger, joint, PropertyType.OSC_Packed_first, PropertyType.input_interlaced_first);
+                    foreach (HandSide side in new HandSide().Values())
+                    {
+                        // Keep the current decoded value separate from the retained buffers. The
+                        // combine layer uses it directly when the two samples are too far apart to
+                        // represent a deliberate half-step.
+                        addDirectChild(
+                            childTrees,
+                            generateDecodeTree(rootBlendtree, side, finger, joint, liveOutput));
+                        blendtreesProcessed++;
 
-                    // interlaced second
-                    blendtreesProcessed += generateSingleBlendTree(rootBlendtree, childTrees, HandSide.left, finger, joint, PropertyType.OSC_Packed_second, PropertyType.input_interlaced_second);
-                    blendtreesProcessed += generateSingleBlendTree(rootBlendtree, childTrees, HandSide.right, finger, joint, PropertyType.OSC_Packed_second, PropertyType.input_interlaced_second);
-                    ProgressDisplay.updateBlendtreeProgress(blendtreesProcessed, PACKED_BLENDTREE_COUNT);
+                        if (interlaced)
+                        {
+                            // Buffer one updates on bit 0 and buffer two updates on bit 1. At any
+                            // point they therefore contain the latest two transmitted samples.
+                            addBufferedDecodeTree(
+                                rootBlendtree,
+                                childTrees,
+                                side,
+                                finger,
+                                joint,
+                                PropertyType.input_interlaced_first,
+                                false);
+                            addBufferedDecodeTree(
+                                rootBlendtree,
+                                childTrees,
+                                side,
+                                finger,
+                                joint,
+                                PropertyType.input_interlaced_second,
+                                true);
+                            blendtreesProcessed += 2;
+                        }
+                    }
+
+                    ProgressDisplay.updateBlendtreeProgress(blendtreesProcessed, blendtreeCount);
                 }
             }
 
@@ -215,11 +288,13 @@ namespace HOL
             HOL.Resources.createOutputDirectories();
 
             int animationProcessed = 0;
-            ProgressDisplay.updateAnimationProgress(animationProcessed, PACKED_ANIMATION_COUNT);
 
             PropertyType[] properties;
             if (interlaced)
             {
+                // Animation clips bind to a specific output parameter. The live value and both
+                // retained values therefore need their own clip sets even though they decode the
+                // same packed OSC input.
                 properties = new PropertyType[] { PropertyType.input_interlaced, PropertyType.input_interlaced_first, PropertyType.input_interlaced_second };
             }
             else
@@ -227,19 +302,17 @@ namespace HOL
                 properties = new PropertyType[] { PropertyType.input };
             }
 
+            int animationCount = PACKED_ANIMATION_COUNT * properties.Length;
+            ProgressDisplay.updateAnimationProgress(animationProcessed, animationCount);
+
             foreach (FingerType finger in new FingerType().Values())
             {
                 foreach (FingerBendType joint in new FingerBendType().Values())
                 {
-                    // Because reasons, we need 3 sets of packed animations:
-                    // #1: normal, output to interlaced
-                    // #2 output to interlaced_first
-                    // # output to interlaced_second
-
                     foreach(PropertyType property in properties)
                     {
                         // We use two different methods for unpacking the data into left/right values.
-                        // See each generator method for details, and generateSingleBlendTree() for how they are used
+                        // See each generator method for details, and generateDecodeTree() for how they are used.
                         animationProcessed += generatedPackedAnimationRight(finger, joint, AnimationClipPosition.negative, property);
                         animationProcessed += generatedPackedAnimationRight(finger, joint, AnimationClipPosition.positive, property);
 
@@ -250,7 +323,7 @@ namespace HOL
                         }
                     }
 
-                    ProgressDisplay.updateAnimationProgress(animationProcessed, PACKED_ANIMATION_COUNT);
+                    ProgressDisplay.updateAnimationProgress(animationProcessed, animationCount);
                 }
             }
         }

@@ -123,8 +123,6 @@ namespace HOL
                 case PropertyType.OSC_Alternating:
                 case PropertyType.OSC_Packed:
                 case PropertyType.input_packed:
-                case PropertyType.OSC_Packed_first:
-                case PropertyType.OSC_Packed_second:
                     {
                     // the param may be supplied even when dealing with these.
                     // This is easier than checking the enum over and over.

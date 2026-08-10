@@ -2726,6 +2726,11 @@ void UserInterface::buildVRChatOSCSettings()
 	ImGui::SeparatorText("VRChat");
 
 	ImGui::Checkbox("Send OSC", &Config.vrchat.sendOsc);
+	ImGui::Checkbox("Preview networked", &Config.vrchat.previewInterlaced);
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip("Preview what your hands will look like to other people");
+	}
 	// ImGui::Checkbox("Send full", &Config.vrchat.sendFull);
 	// ImGui::SameLine();
 	// ImGui::Checkbox("Send Packed", &Config.vrchat.sendPacked);

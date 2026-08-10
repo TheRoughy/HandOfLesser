@@ -1,0 +1,190 @@
+﻿using UnityEditor;
+using UnityEditor.Animations;
+using UnityEngine;
+
+namespace HOL
+{
+    // Packed OSC gives each hand four bits per joint. When a value falls between two of those
+    // steps, the sender alternates between the lower and upper value. Averaging the two latest
+    // samples gives us an additional half-step of precision.
+    //
+    // input_interlaced is the live decoded value. input_interlaced_first and
+    // input_interlaced_second are local Animator parameters that store the two latest samples.
+    // The interlace bit decides which stored value follows the packed input and which one feeds
+    // its existing value back into itself. This gives us two persistent buffers without changing
+    // Animator states.
+    class InterlacedBuffer
+    {
+        // A single hand occupies four bits of the packed byte, giving it values from 0 to 15.
+        private const int MAX_PACKED_HAND_VALUE = 15;
+
+        public static void addParameters(AnimatorController controller)
+        {
+            // The synced expression parameter remains a Bool. VRChat exposes it to this Float
+            // controller parameter as 0 or 1 so it can drive the selector blend trees.
+            controller.AddParameter(
+                HOL.Resources.INTERLACE_BIT_OSC_PARAMETER_NAME,
+                AnimatorControllerParameterType.Float);
+
+            // The live value is used when movement is too large to average safely. The first and
+            // second values are the alternating samples used to recover the in-between step.
+            foreach (HandSide side in new HandSide().Values())
+            {
+                foreach (FingerType finger in new FingerType().Values())
+                {
+                    foreach (FingerBendType joint in new FingerBendType().Values())
+                    {
+                        controller.AddParameter(
+                            HOL.Resources.getJointParameterName(
+                                side,
+                                finger,
+                                joint,
+                                PropertyType.input_interlaced),
+                            AnimatorControllerParameterType.Float);
+                        controller.AddParameter(
+                            HOL.Resources.getJointParameterName(
+                                side,
+                                finger,
+                                joint,
+                                PropertyType.input_interlaced_first),
+                            AnimatorControllerParameterType.Float);
+                        controller.AddParameter(
+                            HOL.Resources.getJointParameterName(
+                                side,
+                                finger,
+                                joint,
+                                PropertyType.input_interlaced_second),
+                            AnimatorControllerParameterType.Float);
+                    }
+                }
+            }
+        }
+
+        private static AnimationClip loadBufferAnimation(
+            HandSide side,
+            FingerType finger,
+            FingerBendType joint,
+            PropertyType bufferProperty,
+            AnimationClipPosition position)
+        {
+            // The decoder animations already contain the -1 and +1 endpoints needed to reproduce
+            // any value in the buffer. The left hand is encoded as 16 separate high-nibble steps,
+            // while the right hand uses a continuous low-nibble ramp, so their endpoint clips use
+            // different naming schemes.
+            if (side == HandSide.left)
+            {
+                int packedValue = position == AnimationClipPosition.negative
+                    ? 0
+                    : MAX_PACKED_HAND_VALUE;
+
+                return AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                    HOL.Resources.getAnimationOutputPath(
+                        HOL.Resources.getPackedAnimationClipName(
+                            finger,
+                            joint,
+                            packedValue,
+                            bufferProperty)));
+            }
+
+            return AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                HOL.Resources.getAnimationOutputPath(
+                    HOL.Resources.getAnimationClipName(
+                        side,
+                        finger,
+                        joint,
+                        bufferProperty,
+                        position)));
+        }
+
+        private static BlendTree generateHoldTree(
+            BlendTree parent,
+            HandSide side,
+            FingerType finger,
+            FingerBendType joint,
+            PropertyType bufferProperty)
+        {
+            BlendTree tree = new BlendTree();
+            AssetDatabase.AddObjectToAsset(tree, parent);
+
+            string bufferParameter = HOL.Resources.getJointParameterName(
+                side,
+                finger,
+                joint,
+                bufferProperty);
+
+            tree.name = bufferParameter + "_hold";
+            tree.blendType = BlendTreeType.Simple1D;
+            tree.useAutomaticThresholds = false;
+            tree.blendParameter = bufferParameter;
+            tree.hideFlags = HideFlags.HideInHierarchy;
+
+            // This tree reads the current buffer value, blends between clips that write -1 and
+            // +1, then writes the resulting value back to the same parameter. The output is
+            // therefore identical to the input on every frame, preserving the last sample while
+            // the other buffer is being updated.
+            tree.AddChild(
+                loadBufferAnimation(
+                    side,
+                    finger,
+                    joint,
+                    bufferProperty,
+                    AnimationClipPosition.negative),
+                -1);
+            tree.AddChild(
+                loadBufferAnimation(
+                    side,
+                    finger,
+                    joint,
+                    bufferProperty,
+                    AnimationClipPosition.positive),
+                1);
+
+            return tree;
+        }
+
+        public static BlendTree generateLatchTree(
+            BlendTree parent,
+            BlendTree updateTree,
+            HandSide side,
+            FingerType finger,
+            FingerBendType joint,
+            PropertyType bufferProperty,
+            bool updateWhenBitIsSet)
+        {
+            BlendTree tree = new BlendTree();
+            AssetDatabase.AddObjectToAsset(tree, parent);
+
+            tree.name = HOL.Resources.getJointParameterName(side, finger, joint, bufferProperty);
+            tree.blendType = BlendTreeType.Simple1D;
+            tree.useAutomaticThresholds = false;
+            tree.blendParameter = HOL.Resources.INTERLACE_BIT_OSC_PARAMETER_NAME;
+            tree.hideFlags = HideFlags.HideInHierarchy;
+
+            // updateTree decodes the current packed OSC byte directly into this buffer. holdTree
+            // keeps the previously decoded value. Since the selected update branch remains active
+            // until the bit changes again, it also handles the packed value and bit arriving on
+            // different Animator evaluations.
+            BlendTree holdTree = generateHoldTree(
+                parent,
+                side,
+                finger,
+                joint,
+                bufferProperty);
+
+            if (updateWhenBitIsSet)
+            {
+                // Buffer two follows packets marked 1 and holds while packets are marked 0.
+                tree.AddChild(holdTree, 0);
+                tree.AddChild(updateTree, 1);
+            }
+            else
+            {
+                // Buffer one follows packets marked 0 and holds while packets are marked 1.
+                tree.AddChild(updateTree, 0);
+                tree.AddChild(holdTree, 1);
+            }
+
+            return tree;
+        }
+    }
+}

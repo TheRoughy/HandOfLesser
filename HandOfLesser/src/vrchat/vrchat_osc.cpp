@@ -574,7 +574,7 @@ namespace HOL::VRChat
 			.closeMessage();
 
 		packet.openMessage(OSC_USE_FULL_PARAMETER.c_str(), 1)
-			.int32(Config.vrchat.sendFull ? 1 : 0)
+			.int32(Config.vrchat.shouldUseFullData() ? 1 : 0)
 			.closeMessage();
 
 		packet.closeBundle();
@@ -607,7 +607,7 @@ namespace HOL::VRChat
 		}
 
 		packet.openMessage(OSC_USE_FULL_PARAMETER.c_str(), 1)
-			.int32(Config.vrchat.sendFull ? 1 : 0)
+			.int32(Config.vrchat.shouldUseFullData() ? 1 : 0)
 			.closeMessage();
 
 		packet.closeBundle();
@@ -652,7 +652,7 @@ namespace HOL::VRChat
 		}
 
 		packet.openMessage(OSC_USE_FULL_PARAMETER.c_str(), 1)
-			.int32(Config.vrchat.sendFull ? 1 : 0)
+			.int32(Config.vrchat.shouldUseFullData() ? 1 : 0)
 			.closeMessage();
 
 		packet.closeBundle();

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
-using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 
 public class HandOfLesserAnimationGenerator : EditorWindow
@@ -98,11 +97,6 @@ public class HandOfLesserAnimationGenerator : EditorWindow
                 addAnimatorLayer(controller, ControllerLayer.inputAlternating, 1, bothHandsMask);
                 break;
             case TransmitType.packed:
-                if (sUseInterlace)
-                {
-                    addAnimatorLayer(controller, ControllerLayer.interlacePopulate, 1, bothHandsMask);
-                }
-
                 addAnimatorLayer(controller, ControllerLayer.inputPacked, 1, bothHandsMask);
 
                 if (sUseInterlace)
@@ -133,10 +127,9 @@ public class HandOfLesserAnimationGenerator : EditorWindow
                 Alternating.populateHandSwitchLayer(controller);
                 break;
             case TransmitType.packed:   // TODO generate unpacking layer
-                Packed.populatePackedLayer(controller);
+                Packed.populatePackedLayer(controller, sUseInterlace);
                 if (sUseInterlace)
                 {
-                    InterlacedFlipFlopStateMachine.populateHandSwitchLayer(controller);
                     InterlacedWeigh.populateWeighLayer(controller);
                     InterlacedCombine.populateCombineLayer(controller);
                 }
@@ -241,7 +234,7 @@ public class HandOfLesserAnimationGenerator : EditorWindow
 
         if (sUseInterlace)
         {
-            InterlacedFlipFlop.addParameters(controller);
+            InterlacedBuffer.addParameters(controller);
             InterlacedWeigh.addParameters(controller);
         }
 
@@ -287,7 +280,6 @@ public class HandOfLesserAnimationGenerator : EditorWindow
                         Packed.generateAnimations(sUseInterlace);
                         if (sUseInterlace)
                         {
-                            InterlacedFlipFlop.generateAnimations();
                             InterlacedWeigh.generateAnimations();
                             InterlacedCombine.generateAnimations();
                         }
