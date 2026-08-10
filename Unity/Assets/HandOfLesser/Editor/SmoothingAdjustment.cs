@@ -105,7 +105,7 @@ namespace HOL
             for (int i = 0; i < FrameRates.Length; i++)
             {
                 int framerate = FrameRates[i];
-                float frametime = 1000.0f / (float)framerate;
+                float frametime = 1.0f / (float)framerate;
 
                 AnimationClip anim = AssetDatabase.LoadAssetAtPath<AnimationClip>(
                     HOL.Resources.getAnimationOutputPath(adjustedProperty, framerate));

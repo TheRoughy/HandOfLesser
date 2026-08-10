@@ -61,8 +61,10 @@ namespace HOL
         smooth,     // Output used for smoothing, used to drive avatarRig
         avatarRig,  // Humanoid rig or skeletal
         avatarRigCombined,   // Contains both curl and splay in a single animation
-        fps,            // Measuring fps to adjusting smoothing accordingly
-        fps_smooth,     //  Measured value is unstable so needs smoothing
+        fps_time,       // Continuously animated clock used to measure frame time
+        fps_previous,   // Clock value retained from the previous Animator evaluation
+        fps,            // Raw time between Animator evaluations
+        fps_smooth,     // Measured frame time is unstable, so smooth it before use
         smoothing_input,    // Raw smoothing amount for 60fps
         smoothing_adjusted, // adjusted for various other framerates
         smoothing_adjusted_max, // use when there is little motion to
@@ -222,6 +224,8 @@ namespace HOL
                 case PropertyType.input_interlaced_first: return "inputInterlacedFirst";
                 case PropertyType.input_interlaced_second: return "inputInterlacedSecond";
                 case PropertyType.interlaced_weight: return "interlacedWeight";
+                case PropertyType.fps_time: return "fpsTime";
+                case PropertyType.fps_previous: return "fpsPrevious";
                 case PropertyType.fps: return "fps";
                 case PropertyType.fps_smooth: return "fpsSmooth";
                 case PropertyType.smoothing_input: return "smoothingAmount";
