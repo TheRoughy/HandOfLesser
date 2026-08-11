@@ -111,7 +111,6 @@ namespace HOL
 				 {"interlacePacked", settings.interlacePacked},
 				 {"packedUpdateInterval", settings.packedUpdateInterval},
 				 {"useUnityHumanoidSplay", settings.useUnityHumanoidSplay},
-				 {"sendDebugOsc", settings.sendDebugOsc},
 				 {"alternateCurlTest", settings.alternateCurlTest},
 				 {"curlDebug", settings.curlDebug},
 				 {"splayDebug", settings.splayDebug}};
@@ -127,7 +126,6 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "interlacePacked", settings.interlacePacked);
 			nlohmann::get_to_if_present(j, "packedUpdateInterval", settings.packedUpdateInterval);
 			nlohmann::get_to_if_present(j, "useUnityHumanoidSplay", settings.useUnityHumanoidSplay);
-			nlohmann::get_to_if_present(j, "sendDebugOsc", settings.sendDebugOsc);
 			nlohmann::get_to_if_present(j, "alternateCurlTest", settings.alternateCurlTest);
 			nlohmann::get_to_if_present(j, "curlDebug", settings.curlDebug);
 			nlohmann::get_to_if_present(j, "splayDebug", settings.splayDebug);
