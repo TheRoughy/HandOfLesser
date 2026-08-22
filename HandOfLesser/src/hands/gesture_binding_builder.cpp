@@ -834,7 +834,8 @@ namespace HOL::GestureBindings
 			auto dragAction = HOL::HandDragAction::Create();
 
 			// Keep the drag anchor on the thumb tip like the original hard-coded binding.
-			dragAction->setup(binding.side, XR_HAND_JOINT_THUMB_TIP_EXT);
+			dragAction->setup(
+				binding.side, XR_HAND_JOINT_THUMB_TIP_EXT, binding.joystickSensitivity);
 
 			auto triggerGesture = HOL::Gesture::OpenHandPinchGesture::Gesture::Create();
 			triggerGesture->parameters.pinchFinger = binding.proximityFinger;

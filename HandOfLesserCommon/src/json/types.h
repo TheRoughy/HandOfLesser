@@ -201,7 +201,8 @@ namespace HOL
 				 {"invertedFacingModifiers", binding.invertedFacingModifiers},
 				 {"facingConditionMode", binding.facingConditionMode},
 				 {"target", binding.target},
-				 {"pressAndRelease", binding.pressAndRelease}};
+				 {"pressAndRelease", binding.pressAndRelease},
+				 {"joystickSensitivity", binding.joystickSensitivity}};
 		}
 
 		inline void from_json(const nlohmann::json& j, GestureBinding& binding)
@@ -219,6 +220,8 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "facingConditionMode", binding.facingConditionMode);
 			nlohmann::get_to_if_present(j, "target", binding.target);
 			nlohmann::get_to_if_present(j, "pressAndRelease", binding.pressAndRelease);
+			nlohmann::get_to_if_present(
+				j, "joystickSensitivity", binding.joystickSensitivity);
 		}
 
 		inline void to_json(nlohmann::json& j, const InputSettings& settings)

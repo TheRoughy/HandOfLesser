@@ -1234,6 +1234,12 @@ void HOL::UserInterface::buildBindings()
 			}
 		}
 
+		if (b.target == settings::InputTarget::Joystick)
+		{
+			ImGui::SliderFloat(
+				"Sensitivity", &b.joystickSensitivity, 0.1f, 3.0f, "%.2fx");
+		}
+
 		ImGui::Separator();
 		if (ImGui::Button("Save"))
 		{

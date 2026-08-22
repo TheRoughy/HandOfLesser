@@ -288,6 +288,7 @@ namespace HOL
 			// Output target — determines action/sink type.
 			InputTarget target = InputTarget::None;
 			bool pressAndRelease = false;
+			float joystickSensitivity = 1.0f;
 		};
 
 		struct InputSettings

@@ -2,10 +2,12 @@
 
 namespace HOL
 {
-	std::shared_ptr<HandDragAction> HandDragAction::setup(HandSide side, XrHandJointEXT joint)
+	std::shared_ptr<HandDragAction>
+	HandDragAction::setup(HandSide side, XrHandJointEXT joint, float sensitivity)
 	{
 		this->mHandSide = side;
 		this->mTargetJoint = joint;
+		this->mSensitivity = sensitivity;
 		return shared_from_this();
 	}
 
@@ -49,8 +51,8 @@ namespace HOL
 					float forwardAmount = diff.dot(forward);
 					float rightAmount = diff.dot(right);
 
-					forwardAmount *= mMultiplier;
-					rightAmount *= mMultiplier;
+					forwardAmount *= BaseMultiplier * mSensitivity;
+					rightAmount *= BaseMultiplier * mSensitivity;
 
 					forwardAmount = std::clamp(forwardAmount, -1.0f, 1.0f);
 					rightAmount = std::clamp(rightAmount, -1.0f, 1.0f);
@@ -72,7 +74,7 @@ namespace HOL
 					diff = HOL::quaternionFromEulerAnglesDegrees(0, -35, 0) * diff;
 
 					diff.z() = -diff.z();
-					diff *= mMultiplier;
+					diff *= BaseMultiplier * mSensitivity;
 					diff.x() = std::clamp(diff.x(), -1.0f, 1.0f);
 					diff.z() = std::clamp(diff.z(), -1.0f, 1.0f);
 
