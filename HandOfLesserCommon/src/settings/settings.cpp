@@ -120,13 +120,12 @@ namespace HOL::settings
 			addBinding(b);
 		}
 
-		// Right Y — Pinky tap and hold
+		// Right Y — Pinky tap
 		{
 			GestureBinding b;
 			b.side = HOL::RightHand;
 			b.kind = GestureKind::Proximity;
 			b.proximityFinger = HOL::FingerLittle;
-			b.modifiers = static_cast<uint32_t>(GestureModifier::Hold);
 			b.facingModifiers = static_cast<uint32_t>(GestureModifier::LookingAtHand);
 			b.target = InputTarget::Y;
 			addBinding(b);
