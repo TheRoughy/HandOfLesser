@@ -37,9 +37,9 @@ namespace HOL
                 timeScale = 1,
             });
 
-            AnimationClip negativeAnimation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            AnimationClip negativeAnimation = HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(HOL.Resources.getAnimationClipName(side, finger, joint, PropertyType.avatarRig, AnimationClipPosition.negative)));
-            AnimationClip positiveAnimation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            AnimationClip positiveAnimation = HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(HOL.Resources.getAnimationClipName(side, finger, joint, PropertyType.avatarRig, AnimationClipPosition.positive)));
             
             tree.AddChild(positiveAnimation, -1);
@@ -50,7 +50,7 @@ namespace HOL
 
         private static AnimationClip GetAnimationClip(HandSide side, FingerType finger, AnimationClipPosition curlPosition, AnimationClipPosition splayPosition)
         {
-            return AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            return HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(
                     HOL.Resources.getAnimationClipName(
                         side,
@@ -199,7 +199,9 @@ namespace HOL
             int animationProcessed = 0;
             ProgressDisplay.updateAnimationProgress(animationProcessed, HUMANOID_ANIMATION_COUNT);
 
-            FingerAnimationInterface animGenerator = useSkeletal ? new FingerAnimations.SkeletalFingerAnimations() : new FingerAnimations.HumanoidFingerAnimations();
+            FingerAnimationInterface animGenerator = useSkeletal
+                ? new FingerAnimations.SkeletalFingerAnimations(avatar)
+                : new FingerAnimations.HumanoidFingerAnimations();
 
             foreach (HandSide side in new HandSide().Values())
             {
@@ -216,18 +218,18 @@ namespace HOL
                         if (joint == FingerBendType.first)
                         {
                             // Closed and open, fully ACTUALLY splayed ( finger rolled outwards along the Z axis in an open state )
-                            animationProcessed += animGenerator.generateCombinedCurlSplayAnimation(avatar, side, finger, AnimationClipPosition.negative, AnimationClipPosition.positive);
-                            animationProcessed += animGenerator.generateCombinedCurlSplayAnimation(avatar, side, finger, AnimationClipPosition.positive, AnimationClipPosition.negative);
+                            animationProcessed += animGenerator.generateCombinedCurlSplayAnimation(side, finger, AnimationClipPosition.negative, AnimationClipPosition.positive);
+                            animationProcessed += animGenerator.generateCombinedCurlSplayAnimation(side, finger, AnimationClipPosition.positive, AnimationClipPosition.negative);
 
                             // Closed and open, not splayed ( rolled inwards, if at all )
-                            animationProcessed += animGenerator.generateCombinedCurlSplayAnimation(avatar, side, finger, AnimationClipPosition.negative, AnimationClipPosition.negative);
-                            animationProcessed += animGenerator.generateCombinedCurlSplayAnimation(avatar, side, finger, AnimationClipPosition.positive, AnimationClipPosition.positive);
+                            animationProcessed += animGenerator.generateCombinedCurlSplayAnimation(side, finger, AnimationClipPosition.negative, AnimationClipPosition.negative);
+                            animationProcessed += animGenerator.generateCombinedCurlSplayAnimation(side, finger, AnimationClipPosition.positive, AnimationClipPosition.positive);
                         }
                         else // Joints that don't have splay
                         {
                             // These animatiosn drive the humanoid rig ( for now )
-                            animationProcessed += animGenerator.generateBendAnimation(avatar, side, finger, joint, AnimationClipPosition.negative);
-                            animationProcessed += animGenerator.generateBendAnimation(avatar, side, finger, joint, AnimationClipPosition.positive);
+                            animationProcessed += animGenerator.generateBendAnimation(side, finger, joint, AnimationClipPosition.negative);
+                            animationProcessed += animGenerator.generateBendAnimation(side, finger, joint, AnimationClipPosition.positive);
                         }
 
                         ProgressDisplay.updateAnimationProgress(animationProcessed, HUMANOID_ANIMATION_COUNT);

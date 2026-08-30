@@ -11,7 +11,10 @@ namespace HOL
 {
     class Resources
     {
-        private static readonly string HANDOFLESSER_PATH = "Assets/HandOfLesser";
+        private static readonly string HANDOFLESSER_ASSET_PATH = "Assets/HandOfLesser";
+        private static readonly string HANDOFLESSER_PACKAGE_PATH
+            = "Packages/com.nordskog.handoflesser.modular-avatar";
+        private static readonly string GENERATED_PATH = "Assets/HandOfLesser/generated";
 
         public static readonly string NAMESPACE = "HOL";
 
@@ -228,6 +231,16 @@ namespace HOL
             return Path.Combine("Assets", "HandOfLesser", "generated", "handoflesser_controller" + ".controller");
         }
 
+        public static string getAnimationContainerPath()
+        {
+            return GENERATED_PATH + "/handoflesser_animations.asset";
+        }
+
+        public static AnimationClip loadAnimationClip(string path)
+        {
+            return ClipTools.loadClip(path);
+        }
+
         public static void createOutputDirectories()
         {
             if (!AssetDatabase.IsValidFolder("Assets/HandOfLesser"))
@@ -240,25 +253,41 @@ namespace HOL
                 AssetDatabase.CreateFolder("Assets/HandOfLesser", "generated");
             }
 
-            if (!AssetDatabase.IsValidFolder("Assets/HandOfLesser/generated/animations"))
-            {
-                AssetDatabase.CreateFolder("Assets/HandOfLesser/generated", "animations");
-            }
         }
 
         public static AvatarMask getBothHandsMask()
         {
-            return AssetDatabase.LoadAssetAtPath<AvatarMask>(HANDOFLESSER_PATH + "/vrc_handsonly.mask");
+            return AssetDatabase.LoadAssetAtPath<AvatarMask>(getSourcePath() + "/vrc_handsonly.mask");
         }
 
         public static AvatarMask getBothHandsSkeletalMask()
         {
-            return AssetDatabase.LoadAssetAtPath<AvatarMask>(HANDOFLESSER_PATH + "/vrc_handsonly_skeletal.mask");
+            return AssetDatabase.LoadAssetAtPath<AvatarMask>(getSourcePath() + "/vrc_handsonly_skeletal.mask");
         }
 
         public static string getParametersPath()
         {
-            return HANDOFLESSER_PATH + "/generated/handoflesser_parameters.asset";
+            return GENERATED_PATH + "/handoflesser_parameters.asset";
+        }
+
+        public static string getGeneratedOutputPath()
+        {
+            return GENERATED_PATH;
+        }
+
+        public static string getModularAvatarPrefabPath()
+        {
+            return GENERATED_PATH + "/HandOfLesser_ModularAvatar.prefab";
+        }
+
+        private static string getSourcePath()
+        {
+            if (AssetDatabase.IsValidFolder(HANDOFLESSER_ASSET_PATH))
+            {
+                return HANDOFLESSER_ASSET_PATH;
+            }
+
+            return HANDOFLESSER_PACKAGE_PATH;
         }
 
     }

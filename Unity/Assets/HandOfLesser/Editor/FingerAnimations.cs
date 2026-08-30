@@ -10,13 +10,13 @@ namespace HOL.FingerAnimations
     
     interface FingerAnimationInterface
     {
-        int generateBendAnimation(GameObject avatar, HandSide side, FingerType finger, FingerBendType joint, AnimationClipPosition position);
-        int generateCombinedCurlSplayAnimation(GameObject avatar, HandSide side, FingerType finger, AnimationClipPosition curlPosition, AnimationClipPosition splayPosition);
+        int generateBendAnimation(HandSide side, FingerType finger, FingerBendType joint, AnimationClipPosition position);
+        int generateCombinedCurlSplayAnimation(HandSide side, FingerType finger, AnimationClipPosition curlPosition, AnimationClipPosition splayPosition);
     }
 
     class HumanoidFingerAnimations : FingerAnimationInterface
     {
-        public int generateBendAnimation(GameObject avatar, HandSide side, FingerType finger, FingerBendType joint, AnimationClipPosition position)
+        public int generateBendAnimation(HandSide side, FingerType finger, FingerBendType joint, AnimationClipPosition position)
         {
             AnimationClip clip = new AnimationClip();
             ClipTools.setClipProperty(
@@ -30,7 +30,7 @@ namespace HOL.FingerAnimations
             return 1;
         }
 
-        public int generateCombinedCurlSplayAnimation(GameObject avatar, HandSide side, FingerType finger, AnimationClipPosition curlPosition, AnimationClipPosition splayPosition)
+        public int generateCombinedCurlSplayAnimation(HandSide side, FingerType finger, AnimationClipPosition curlPosition, AnimationClipPosition splayPosition)
         {
             AnimationClip clip = new AnimationClip();
             ClipTools.setClipProperty(
@@ -53,6 +53,13 @@ namespace HOL.FingerAnimations
 
     class SkeletalFingerAnimations : FingerAnimationInterface
     {
+        private readonly GameObject mAvatar;
+
+        public SkeletalFingerAnimations(GameObject avatar)
+        {
+            mAvatar = avatar;
+        }
+
          private static Quaternion applyXRotation(Quaternion source, float curlRot)
         {
             return source * Quaternion.Euler(curlRot, 0, 0);
@@ -82,9 +89,9 @@ namespace HOL.FingerAnimations
         }
 
 
-        public int generateBendAnimation(GameObject avatar, HandSide side, FingerType finger, FingerBendType joint, AnimationClipPosition position)
+        public int generateBendAnimation(HandSide side, FingerType finger, FingerBendType joint, AnimationClipPosition position)
         {
-            Transform fingerTrans = HOL.AvatarTools.getFingerBone(avatar, side, finger, joint);
+            Transform fingerTrans = HOL.AvatarTools.getFingerBone(mAvatar, side, finger, joint);
             float relativeCurl = AnimationValues.getSkeletalValueFromCenter(side, finger, joint, position);
 
             // Absolute rotation for now, need some kind of calibration system to do this properly.
@@ -95,7 +102,7 @@ namespace HOL.FingerAnimations
             AnimationClip clip = new AnimationClip();
             ClipTools.setClipPropertyLocalRotation(
                 ref clip,
-                    avatar.transform,
+                    mAvatar.transform,
                     fingerTrans,
                     curlRot
                 );
@@ -105,10 +112,10 @@ namespace HOL.FingerAnimations
             return 1;
         }
 
-        public int generateCombinedCurlSplayAnimation(GameObject avatar, HandSide side, FingerType finger, AnimationClipPosition curlPosition, AnimationClipPosition splayPosition )
+        public int generateCombinedCurlSplayAnimation(HandSide side, FingerType finger, AnimationClipPosition curlPosition, AnimationClipPosition splayPosition )
         {
             AnimationClip clip = new AnimationClip();
-            Transform fingerTrans = HOL.AvatarTools.getFingerBone(avatar, side, finger, FingerBendType.first);
+            Transform fingerTrans = HOL.AvatarTools.getFingerBone(mAvatar, side, finger, FingerBendType.first);
 
             float relativeCurl = AnimationValues.getSkeletalValueFromCenter(side, finger, FingerBendType.first, curlPosition);
             float relativeSplay = AnimationValues.getSkeletalValueFromCenter(side, finger, FingerBendType.splay, splayPosition);
@@ -144,7 +151,7 @@ namespace HOL.FingerAnimations
 
             ClipTools.setClipPropertyLocalRotation(
                 ref clip,
-                    avatar.transform,
+                    mAvatar.transform,
                     fingerTrans,
                     rot
                 );

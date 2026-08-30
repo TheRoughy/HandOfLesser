@@ -4,21 +4,24 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
+using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
+using VRC.SDKBase;
 
 public class HandOfLesserAnimationGenerator : EditorWindow
 {
+    private static readonly Type sModularAvatarPackageBuilder = Type.GetType(
+        "HOL.ModularAvatarPackageBuilder, HandOfLesser.ModularAvatar.Editor");
+
     static TransmitType sTransmitType = TransmitType.packed;
 
     static float sSmoothingTimeMS = 100.0f;
     static float sFullStepSmoothingTimeMS = 250.0f;
     static float sHalfStepSmoothingTimeMS = 500.0f;
 
-    static GameObject sTargetAvatar = null;
-    static bool sUseSkeletal = false;
     static bool sUseInterlace = true;
 
-    [MenuItem("Window/HandOfLesser")]
+    [MenuItem("Tools/HandOfLesser/Generator")]
     public static void ShowWindow()
     {
         GetWindow<HandOfLesserAnimationGenerator>("Hand of Lesser");
@@ -50,23 +53,25 @@ public class HandOfLesserAnimationGenerator : EditorWindow
                     "Smoothing time used when consecutive networked targets differ by one interlaced half-step."),
                 sHalfStepSmoothingTimeMS));
 
-        sTargetAvatar = (GameObject) EditorGUILayout.ObjectField("Avatar:", sTargetAvatar, typeof(GameObject), true);
+        EditorGUILayout.Space();
 
-        // sUseSkeletal = EditorGUILayout.Toggle("Use skeletal: ", sUseSkeletal);
-
-        if (GUILayout.Button("Generate Animations"))
+        if (GUILayout.Button("Generate Animations and Controller"))
         {
-            generateAnimations(sTransmitType);
+            GenerateAll();
         }
 
-        if (GUILayout.Button("Generate Controller"))
+        using (new EditorGUI.DisabledScope(sModularAvatarPackageBuilder == null))
         {
-            generateAnimationController(sTransmitType);
-        }
+            GUIContent modularAvatarButton = new GUIContent(
+                "Generate Modular Avatar Package Assets",
+                sModularAvatarPackageBuilder == null
+                    ? "Install Modular Avatar to enable package generation."
+                    : "Generate the animations, controller, and Modular Avatar prefab.");
 
-        if (GUILayout.Button("Generate Parameters"))
-        {
-            generateAvatarParameters(sTransmitType);
+            if (GUILayout.Button(modularAvatarButton))
+            {
+                sModularAvatarPackageBuilder.GetMethod("BuildPackageAssets").Invoke(null, null);
+            }
         }
     }
 
@@ -97,7 +102,7 @@ public class HandOfLesserAnimationGenerator : EditorWindow
 
     private static void generateControllerLayers(AnimatorController controller, TransmitType transmitType)
     {
-        AvatarMask bothHandsMask = sUseSkeletal ? HOL.Resources.getBothHandsSkeletalMask() : HOL.Resources.getBothHandsMask();
+        AvatarMask bothHandsMask = HOL.Resources.getBothHandsMask();
 
         // We cannot modify the weight or mask of any layers added to the controller, 
         // so we need to remove the base layer, and manually create it and our finger joint layer
@@ -140,6 +145,8 @@ public class HandOfLesserAnimationGenerator : EditorWindow
 
     private static void populateControllerLayers(AnimatorController controller, TransmitType transmitType)
     {
+        populateFingerTrackingOwnership(controller);
+
         switch (transmitType)
         {
             case TransmitType.alternating:
@@ -168,12 +175,26 @@ public class HandOfLesserAnimationGenerator : EditorWindow
             sHalfStepSmoothingTimeMS);
         DirectInput.populateLayer(controller);
         Smoothing.populateSmoothingLayer(controller, transmitType == TransmitType.packed && sUseInterlace);
-        FingerBend.populateFingerJointLayer(controller, sUseSkeletal);
+        FingerBend.populateFingerJointLayer(controller, false);
 
         ProgressDisplay.clearProgress();
     }
 
-    private void generateControllerParameters(AnimatorController controller, TransmitType transmitType)
+    private static void populateFingerTrackingOwnership(AnimatorController controller)
+    {
+        AnimatorControllerLayer layer = ControllerLayer.baseLayer.findLayer(controller);
+        AnimatorState state = layer.stateMachine.AddState("HandOfLesserFingerOwnership");
+        state.writeDefaultValues = false;
+        layer.stateMachine.defaultState = state;
+
+        // HandOfLesser avatars always source their finger muscles from this controller. This keeps
+        // VRChat's native finger tracking from overwriting the Gesture layer later in the frame.
+        VRCAnimatorTrackingControl tracking = state.AddStateMachineBehaviour<VRCAnimatorTrackingControl>();
+        tracking.trackingLeftFingers = VRC_AnimatorTrackingControl.TrackingType.Animation;
+        tracking.trackingRightFingers = VRC_AnimatorTrackingControl.TrackingType.Animation;
+    }
+
+    private static void generateControllerParameters(AnimatorController controller, TransmitType transmitType)
     {
         // Add all the parameters we'll be working with, they need to be present here to be driven
 
@@ -266,7 +287,7 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         FrameRateMeasure.addParameters(controller);
     }
 
-    private void generateAnimationController(TransmitType transmitType)
+    private static void generateAnimationController(TransmitType transmitType)
     {
         HOL.Resources.createOutputDirectories();
 
@@ -280,13 +301,10 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         AssetDatabase.SaveAssets();
     }
 
-    private void generateAnimations(TransmitType transmitType)
+    private static bool generateAnimations(TransmitType transmitType)
     {
-        if (sTargetAvatar == null)
-        {
-            EditorGUILayout.HelpBox("Not avatar assigned!", MessageType.Warning);
-        }
-
+        HOL.Resources.createOutputDirectories();
+        ClipTools.beginGeneration();
 
         // https://forum.unity.com/threads/createasset-is-super-slow.291667/#post-3853330
         // Makes createAsset not be super slow. Note the call to StopAssetEditing() below.
@@ -294,7 +312,8 @@ public class HandOfLesserAnimationGenerator : EditorWindow
 
         try
         {
-            FingerBend.generateAnimations(sTargetAvatar, sUseSkeletal);
+            // Humanoid muscle curves are avatar-independent, so release assets require no avatar.
+            FingerBend.generateAnimations(null, false);
             Smoothing.generateAnimations();
             switch (transmitType)
             {
@@ -317,101 +336,138 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         catch (Exception ex)
         {
             Debug.LogException(ex);
+            return false;
         }
         finally
         {
             AssetDatabase.StopAssetEditing();
         }
+
+        return true;
     }
 
 
-        private void generateAvatarParameters(TransmitType transmitType)
-        {
-            VRCExpressionParameters paramAsset = VRCExpressionParameters.CreateInstance<VRCExpressionParameters>();
+    private static void generateAvatarParameters(TransmitType transmitType)
+    {
+        VRCExpressionParameters paramAsset = VRCExpressionParameters.CreateInstance<VRCExpressionParameters>();
 
         // Usually we'll need to add the parameters for full for local use,
         // and alternating or packed for network.
         // If this is the future and we have enough params to use full for both,
         // we should only add full. Otherwise, full should be added but without sync.
         List<PropertyType> propertyTypes = new List<PropertyType> { PropertyType.OSC_Full };
-            bool syncFull = true;
-            if (transmitType != TransmitType.full)
-            {
-                syncFull = false;   // Trnasmit type not full, do not sync full
-                propertyTypes.Add(transmitType.toPropertyType());
-            }
+        bool syncFull = true;
+        if (transmitType != TransmitType.full)
+        {
+            syncFull = false;   // Trnasmit type not full, do not sync full
+            propertyTypes.Add(transmitType.toPropertyType());
+        }
 
-            List<VRCExpressionParameters.Parameter> parameters = new List<VRCExpressionParameters.Parameter>();
+        List<VRCExpressionParameters.Parameter> parameters = new List<VRCExpressionParameters.Parameter>();
 
-            parameters.Add(new VRCExpressionParameters.Parameter()
-            {
-                name = HOL.Resources.USE_FULL_PARAMETER,
-                valueType = VRCExpressionParameters.ValueType.Int,
-                defaultValue = 0,
-                networkSynced = false
-            });
+        parameters.Add(new VRCExpressionParameters.Parameter()
+        {
+            name = HOL.Resources.USE_FULL_PARAMETER,
+            valueType = VRCExpressionParameters.ValueType.Int,
+            defaultValue = 0,
+            networkSynced = false
+        });
 
-            foreach (PropertyType propertyType in propertyTypes)
+        foreach (PropertyType propertyType in propertyTypes)
+        {
+            foreach(HandSide side in new HandSide().Values())
             {
-                foreach(HandSide side in new HandSide().Values())
+                foreach (FingerType finger in new FingerType().Values())
                 {
-                    foreach (FingerType finger in new FingerType().Values())
+                    foreach (FingerBendType joint in new FingerBendType().Values())
                     {
-                        foreach (FingerBendType joint in new FingerBendType().Values())
-                        {
-                            // Curl
-                            VRCExpressionParameters.Parameter newParam = new VRCExpressionParameters.Parameter();
-                            newParam.name = HOL.Resources.getJointParameterName(side, finger, joint, propertyType);
-                            newParam.valueType
-                                = propertyType == PropertyType.OSC_Packed
-                                  ? VRCExpressionParameters.ValueType.Int
-                                  : VRCExpressionParameters.ValueType.Float;
-                            newParam.defaultValue = 0;
-                            // Only sync if not full, or syncFull true because we will be using full for network sync too
-                            newParam.networkSynced = propertyType != PropertyType.OSC_Full || syncFull;
+                        // Curl
+                        VRCExpressionParameters.Parameter newParam = new VRCExpressionParameters.Parameter();
+                        newParam.name = HOL.Resources.getJointParameterName(side, finger, joint, propertyType);
+                        newParam.valueType
+                            = propertyType == PropertyType.OSC_Packed
+                              ? VRCExpressionParameters.ValueType.Int
+                              : VRCExpressionParameters.ValueType.Float;
+                        newParam.defaultValue = 0;
+                        // Only sync if not full, or syncFull true because we will be using full for network sync too
+                        newParam.networkSynced = propertyType != PropertyType.OSC_Full || syncFull;
 
-                            parameters.Add(newParam);
-                        }
+                        parameters.Add(newParam);
                     }
-
-                    // As of writing, only Full has separate parameters for left/right hands
-                    // Alternating and Packed share a single one.
-                    if (propertyType != PropertyType.OSC_Full)
-                        break;
                 }
+
+                // As of writing, only Full has separate parameters for left/right hands
+                // Alternating and Packed share a single one.
+                if (propertyType != PropertyType.OSC_Full)
+                    break;
             }
+        }
 
-            if (transmitType == TransmitType.packed)
+        if (transmitType == TransmitType.packed)
+        {
+            if (sUseInterlace)
             {
-                if (sUseInterlace)
-                {
-                    // flipFlop for interlaced
-                    VRCExpressionParameters.Parameter newParam = new VRCExpressionParameters.Parameter();
-                    newParam.name = HOL.Resources.INTERLACE_BIT_OSC_PARAMETER_NAME;
-                    newParam.valueType = VRCExpressionParameters.ValueType.Bool;
-                    newParam.defaultValue = 0;
-                    newParam.networkSynced = true;
-
-                    parameters.Add(newParam);
-                }
-                    
-            }
-
-            if (transmitType == TransmitType.alternating)
-            {
-                // Hand side
+                // flipFlop for interlaced
                 VRCExpressionParameters.Parameter newParam = new VRCExpressionParameters.Parameter();
-                newParam.name = HOL.Resources.HAND_SIDE_OSC_PARAMETER_NAME;
+                newParam.name = HOL.Resources.INTERLACE_BIT_OSC_PARAMETER_NAME;
                 newParam.valueType = VRCExpressionParameters.ValueType.Bool;
                 newParam.defaultValue = 0;
                 newParam.networkSynced = true;
 
                 parameters.Add(newParam);
             }
-
-            paramAsset.parameters = parameters.ToArray();
-
-            AssetDatabase.CreateAsset(paramAsset, HOL.Resources.getParametersPath());
-            AssetDatabase.SaveAssets();
         }
+
+        if (transmitType == TransmitType.alternating)
+        {
+            // Hand side
+            VRCExpressionParameters.Parameter newParam = new VRCExpressionParameters.Parameter();
+            newParam.name = HOL.Resources.HAND_SIDE_OSC_PARAMETER_NAME;
+            newParam.valueType = VRCExpressionParameters.ValueType.Bool;
+            newParam.defaultValue = 0;
+            newParam.networkSynced = true;
+
+            parameters.Add(newParam);
+        }
+
+        paramAsset.parameters = parameters.ToArray();
+
+        AssetDatabase.CreateAsset(paramAsset, HOL.Resources.getParametersPath());
+        AssetDatabase.SaveAssets();
     }
+
+    public static bool GenerateAll()
+    {
+        // Everything in generated is disposable. Starting clean prevents stale clips and
+        // controller sub-assets from surviving after the generator changes.
+        AssetDatabase.DeleteAsset(HOL.Resources.getGeneratedOutputPath());
+        HOL.Resources.createOutputDirectories();
+
+        if (!generateAnimations(sTransmitType))
+        {
+            return false;
+        }
+
+        generateAnimationController(sTransmitType);
+        generateAvatarParameters(sTransmitType);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        return true;
+    }
+
+    // Keep the optional Modular Avatar assembly independent from generator internals.
+    public static string GetAnimationControllerOutputPath()
+    {
+        return HOL.Resources.getAnimationControllerOutputPath();
+    }
+
+    public static string GetParametersOutputPath()
+    {
+        return HOL.Resources.getParametersPath();
+    }
+
+    public static string GetModularAvatarPrefabOutputPath()
+    {
+        return HOL.Resources.getModularAvatarPrefabPath();
+    }
+}

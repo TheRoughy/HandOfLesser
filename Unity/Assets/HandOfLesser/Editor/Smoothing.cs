@@ -60,9 +60,9 @@ namespace HOL
             // Property type is reused here, first .normal denoting the blendtree driven by the original value,
             // and .proxy the one driven by the proxy.
             // Both drive the animations setting the proxy
-            AnimationClip negativeAnimation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            AnimationClip negativeAnimation = HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(HOL.Resources.getAnimationClipName(side, finger, joint, PropertyType.smooth, AnimationClipPosition.negative)));
-            AnimationClip positiveAnimation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            AnimationClip positiveAnimation = HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(HOL.Resources.getAnimationClipName(side, finger, joint, PropertyType.smooth, AnimationClipPosition.positive)));
 
             tree.AddChild(negativeAnimation, -1);
@@ -102,7 +102,7 @@ namespace HOL
             FingerBendType joint,
             SmoothingMode mode)
         {
-            return AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            return HOL.Resources.loadAnimationClip(
                 getSmoothingModeAnimationPath(side, finger, joint, mode));
         }
 

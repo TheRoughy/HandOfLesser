@@ -78,7 +78,7 @@ namespace HOL
             PropertyType property,
             AnimationClipPosition position)
         {
-            return AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            return HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(
                     HOL.Resources.getAnimationClipName(side, finger, joint, property, position)));
         }

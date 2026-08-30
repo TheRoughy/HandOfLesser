@@ -47,9 +47,9 @@ namespace HOL
 
             tree.blendParameter = HOL.Resources.getJointParameterName(side, finger, joint, drivingProperty);
 
-            AnimationClip negativeAnimation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            AnimationClip negativeAnimation = HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(HOL.Resources.getAnimationClipName(side, finger, joint, outputProperty, AnimationClipPosition.negative)));
-            AnimationClip positiveAnimation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            AnimationClip positiveAnimation = HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(HOL.Resources.getAnimationClipName(side, finger, joint, outputProperty, AnimationClipPosition.positive)));
 
             tree.AddChild(negativeAnimation, -1);

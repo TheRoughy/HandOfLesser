@@ -27,7 +27,7 @@ namespace HOL
 
         private static AnimationClip loadClip(string clipName)
         {
-            return AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath(clipName));
+            return HOL.Resources.loadAnimationClip(clipPath(clipName));
         }
 
         private static void generateConstantAnimation(string clipName, PropertyType outputProperty, float value)

@@ -55,7 +55,7 @@ namespace HOL
                     // Start
                     {
                         string animationPath = HOL.Resources.getAnimationOutputPath(HOL.Resources.getPackedAnimationClipName(finger, joint, i, outputProperty));
-                        AnimationClip animation = AssetDatabase.LoadAssetAtPath<AnimationClip>(animationPath);
+                        AnimationClip animation = HOL.Resources.loadAnimationClip(animationPath);
 
                         float threshold = i*STEP_COUNT;
                         tree.AddChild(animation, threshold);
@@ -64,7 +64,7 @@ namespace HOL
                     // End
                     {
                         string animationPath = HOL.Resources.getAnimationOutputPath(HOL.Resources.getPackedAnimationClipName(finger, joint, i, outputProperty));
-                        AnimationClip animation = AssetDatabase.LoadAssetAtPath<AnimationClip>(animationPath);
+                        AnimationClip animation = HOL.Resources.loadAnimationClip(animationPath);
 
                         float threshold = i * STEP_COUNT + ( STEP_COUNT - 1 );
                         tree.AddChild(animation, threshold);
@@ -82,7 +82,7 @@ namespace HOL
                     // Negative
                     {
                         string animationPath = HOL.Resources.getAnimationOutputPath(HOL.Resources.getAnimationClipName(HandSide.right, finger, joint, outputProperty, AnimationClipPosition.negative));
-                        AnimationClip animation = AssetDatabase.LoadAssetAtPath<AnimationClip>(animationPath);
+                        AnimationClip animation = HOL.Resources.loadAnimationClip(animationPath);
 
                         float threshold = i;
                         tree.AddChild(animation, threshold);
@@ -91,7 +91,7 @@ namespace HOL
                     // Positive
                     {
                         string animationPath = HOL.Resources.getAnimationOutputPath(HOL.Resources.getAnimationClipName(HandSide.right, finger, joint, outputProperty, AnimationClipPosition.positive));
-                        AnimationClip animation = AssetDatabase.LoadAssetAtPath<AnimationClip>(animationPath);
+                        AnimationClip animation = HOL.Resources.loadAnimationClip(animationPath);
 
                         float threshold = i + (STEP_COUNT - 1);
                         tree.AddChild(animation, threshold);

@@ -27,7 +27,7 @@ namespace HOL
             // parameter the Animator also writes, or the two sources will fight each other.
             tree.blendParameter = HOL.Resources.getJointParameterName(side, finger, joint, PropertyType.OSC_Full);
 
-            AnimationClip negativeAnimation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            AnimationClip negativeAnimation = HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(
                     HOL.Resources.getAnimationClipName(
                         side,
@@ -35,7 +35,7 @@ namespace HOL
                         joint,
                         PropertyType.smooth,
                         AnimationClipPosition.negative)));
-            AnimationClip positiveAnimation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            AnimationClip positiveAnimation = HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(
                     HOL.Resources.getAnimationClipName(
                         side,

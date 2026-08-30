@@ -86,7 +86,7 @@ namespace HOL
             foreach (int frameRate in FrameRates)
             {
                 float frameTime = 1.0f / frameRate;
-                AnimationClip animation = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                AnimationClip animation = HOL.Resources.loadAnimationClip(
                     HOL.Resources.getAnimationOutputPath(
                         outputProperty,
                         frameRate));

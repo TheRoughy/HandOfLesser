@@ -94,7 +94,7 @@ namespace HOL
                         ? 0
                         : MAX_PACKED_HAND_VALUE;
 
-                    return AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                    return HOL.Resources.loadAnimationClip(
                         HOL.Resources.getAnimationOutputPath(
                             HOL.Resources.getPackedAnimationClipName(
                                 finger,
@@ -104,7 +104,7 @@ namespace HOL
                 }
             }
 
-            return AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            return HOL.Resources.loadAnimationClip(
                 HOL.Resources.getAnimationOutputPath(
                     HOL.Resources.getAnimationClipName(
                         side,

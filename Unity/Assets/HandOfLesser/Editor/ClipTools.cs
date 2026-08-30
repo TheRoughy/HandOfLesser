@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,9 +11,54 @@ namespace HOL
 {
     class ClipTools
     {
+        private static readonly Dictionary<string, AnimationClip> sClips
+            = new Dictionary<string, AnimationClip>();
+        private static AnimationClip sContainer;
+
+        public static void beginGeneration()
+        {
+            sClips.Clear();
+            sContainer = null;
+        }
+
         public static void saveClip(AnimationClip clip, string savePath)
         {
-            AssetDatabase.CreateAsset(clip, savePath);
+            string clipName = Path.GetFileNameWithoutExtension(savePath);
+            clip.name = clipName;
+            clip.hideFlags = HideFlags.HideInHierarchy;
+
+            // Keep the generated clips in one asset instead of creating hundreds of individual
+            // files. The first clip is the main asset and every later clip is a named subasset.
+            if (sContainer == null)
+            {
+                sContainer = clip;
+                AssetDatabase.CreateAsset(clip, HOL.Resources.getAnimationContainerPath());
+            }
+            else
+            {
+                AssetDatabase.AddObjectToAsset(clip, sContainer);
+            }
+            sClips.Add(clipName, clip);
+        }
+
+        public static AnimationClip loadClip(string path)
+        {
+            string clipName = Path.GetFileNameWithoutExtension(path);
+            if (sClips.TryGetValue(clipName, out AnimationClip clip))
+            {
+                return clip;
+            }
+
+            foreach (UnityEngine.Object asset in AssetDatabase.LoadAllAssetsAtPath(
+                         HOL.Resources.getAnimationContainerPath()))
+            {
+                if (asset is AnimationClip loadedClip)
+                {
+                    sClips[loadedClip.name] = loadedClip;
+                }
+            }
+
+            return sClips.TryGetValue(clipName, out clip) ? clip : null;
         }
 
         public static void setClipProperty(ref AnimationClip clip, string property, float value)
