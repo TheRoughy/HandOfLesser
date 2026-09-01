@@ -3005,11 +3005,11 @@ void UserInterface::buildAbout()
 {
 	ImGui::SeparatorText("HandOfLesser");
 	ImGui::Text("Version: %s (%s)", HOL_VERSION_STRING, HOL_BUILD_COMMIT);
-	ImGui::TextUnformatted("Author: Roughy");
+	ImGui::TextUnformatted("Author: TheRoughy");
 	ImGui::TextUnformatted("License: MIT");
 
 	ImGui::Spacing();
-	buildUrlLine("GitHub:", "https://github.com/Nordskog/HandOfLesser");
+	buildUrlLine("GitHub:", "https://github.com/TheRoughy/HandOfLesser");
 	buildUrlLine("Discord:", "https://discord.gg/k9QNcvvJmF");
 }
 

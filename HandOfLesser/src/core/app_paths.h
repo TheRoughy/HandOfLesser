@@ -22,7 +22,7 @@ namespace HOL::Paths
 		std::filesystem::path appDataDirectory(localAppDataPath);
 		CoTaskMemFree(localAppDataPath);
 
-		appDataDirectory /= "Nordskog";
+		appDataDirectory /= "TheRoughy";
 		appDataDirectory /= "HandOfLesser";
 		return appDataDirectory;
 	}

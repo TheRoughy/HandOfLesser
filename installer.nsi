@@ -13,7 +13,7 @@
 
 	!define DRIVER_NAME "00handoflesser"
 	!define DRIVER_OUTDIR "output\drivers\${DRIVER_NAME}"
-	!define COMPANY_NAME "Nordskog"
+	!define COMPANY_NAME "TheRoughy"
 	!define PRODUCT_NAME "HandOfLesser"
 	!define APP_REG_KEY "Software\${COMPANY_NAME}\${PRODUCT_NAME}"
 	!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${COMPANY_NAME} ${PRODUCT_NAME}"
@@ -31,7 +31,7 @@
 	VIProductVersion "${VERSION}"
 	VIAddVersionKey /LANG=1033 "ProductName" "${PRODUCT_NAME}"
 	VIAddVersionKey /LANG=1033 "FileDescription" "${PRODUCT_NAME} Installer"
-	VIAddVersionKey /LANG=1033 "LegalCopyright" "Open source at https://github.com/Nordskog/HandOfLesser"
+	VIAddVersionKey /LANG=1033 "LegalCopyright" "Open source at https://github.com/TheRoughy/HandOfLesser"
 	VIAddVersionKey /LANG=1033 "FileVersion" "${VERSION}"
 	VIAddVersionKey /LANG=1033 "ProductVersion" "${VERSION}"
 

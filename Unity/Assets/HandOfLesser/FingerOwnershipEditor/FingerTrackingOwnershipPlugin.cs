@@ -14,7 +14,7 @@ namespace HOL
     {
         private const string OwnershipStateName = "HandOfLesserFingerOwnership";
 
-        public override string QualifiedName => "com.nordskog.handoflesser.finger-ownership";
+        public override string QualifiedName => "com.theroughy.handoflesser.finger-ownership";
         public override string DisplayName => "HandOfLesser Finger Ownership";
 
         protected override void Configure()

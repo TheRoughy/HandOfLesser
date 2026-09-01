@@ -13,7 +13,7 @@ namespace HOL
     {
         private static readonly string HANDOFLESSER_ASSET_PATH = "Assets/HandOfLesser";
         private static readonly string HANDOFLESSER_PACKAGE_PATH
-            = "Packages/com.nordskog.handoflesser.modular-avatar";
+            = "Packages/com.theroughy.handoflesser.modular-avatar";
         private static readonly string GENERATED_PATH = "Assets/HandOfLesser/generated";
 
         public static readonly string NAMESPACE = "HOL";
