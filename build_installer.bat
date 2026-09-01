@@ -22,7 +22,7 @@ if not exist "%APP_EXE%" (
 	exit /b 1
 )
 
-set /p HOL_VERSION=<"%VERSION_FILE%"
+for /f "usebackq tokens=1" %%I in ("%VERSION_FILE%") do set "HOL_VERSION=%%I"
 
 where makensis.exe >nul 2>nul
 if errorlevel 1 (
