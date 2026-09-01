@@ -1,0 +1,28 @@
+{
+  "name": "HandOfLesser.FingerOwnership.Editor",
+  "rootNamespace": "HOL",
+  "references": [
+    "nadena.dev.ndmf",
+    "VRC.SDKBase",
+    "VRC.SDK3A"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "HOL_MODULAR_AVATAR"
+  ],
+  "versionDefines": [
+    {
+      "name": "nadena.dev.modular-avatar",
+      "expression": "1.16.2",
+      "define": "HOL_MODULAR_AVATAR"
+    }
+  ],
+  "noEngineReferences": false
+}

@@ -6,7 +6,6 @@ using UnityEditor.Animations;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
-using VRC.SDKBase;
 
 public class HandOfLesserAnimationGenerator : EditorWindow
 {
@@ -145,8 +144,6 @@ public class HandOfLesserAnimationGenerator : EditorWindow
 
     private static void populateControllerLayers(AnimatorController controller, TransmitType transmitType)
     {
-        populateFingerTrackingOwnership(controller);
-
         switch (transmitType)
         {
             case TransmitType.alternating:
@@ -178,20 +175,6 @@ public class HandOfLesserAnimationGenerator : EditorWindow
         FingerBend.populateFingerJointLayer(controller, false);
 
         ProgressDisplay.clearProgress();
-    }
-
-    private static void populateFingerTrackingOwnership(AnimatorController controller)
-    {
-        AnimatorControllerLayer layer = ControllerLayer.baseLayer.findLayer(controller);
-        AnimatorState state = layer.stateMachine.AddState("HandOfLesserFingerOwnership");
-        state.writeDefaultValues = false;
-        layer.stateMachine.defaultState = state;
-
-        // HandOfLesser avatars always source their finger muscles from this controller. This keeps
-        // VRChat's native finger tracking from overwriting the Gesture layer later in the frame.
-        VRCAnimatorTrackingControl tracking = state.AddStateMachineBehaviour<VRCAnimatorTrackingControl>();
-        tracking.trackingLeftFingers = VRC_AnimatorTrackingControl.TrackingType.Animation;
-        tracking.trackingRightFingers = VRC_AnimatorTrackingControl.TrackingType.Animation;
     }
 
     private static void generateControllerParameters(AnimatorController controller, TransmitType transmitType)
@@ -459,6 +442,11 @@ public class HandOfLesserAnimationGenerator : EditorWindow
     public static string GetAnimationControllerOutputPath()
     {
         return HOL.Resources.getAnimationControllerOutputPath();
+    }
+
+    public static string GetFingerTrackingControllerOutputPath()
+    {
+        return HOL.Resources.getFingerTrackingControllerOutputPath();
     }
 
     public static string GetParametersOutputPath()

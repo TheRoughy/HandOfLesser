@@ -231,6 +231,15 @@ namespace HOL
             return Path.Combine("Assets", "HandOfLesser", "generated", "handoflesser_controller" + ".controller");
         }
 
+        public static string getFingerTrackingControllerOutputPath()
+        {
+            return Path.Combine(
+                "Assets",
+                "HandOfLesser",
+                "generated",
+                "handoflesser_finger_tracking.controller");
+        }
+
         public static string getAnimationContainerPath()
         {
             return GENERATED_PATH + "/handoflesser_animations.asset";
