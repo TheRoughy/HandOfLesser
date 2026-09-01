@@ -1,0 +1,35 @@
+name: Release Unity VPM Package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Read package version
+        id: package
+        shell: pwsh
+        run: |
+          $package = Get-Content UnityVPM/package.json -Raw | ConvertFrom-Json
+          "version=$($package.version)" >> $env:GITHUB_OUTPUT
+          "name=$($package.name)" >> $env:GITHUB_OUTPUT
+
+      - name: Build package
+        shell: pwsh
+        run: ./build_unity_vpm_package.ps1 -OutputDirectory release
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: unity-v${{ steps.package.outputs.version }}
+          name: HandOfLesser Modular Avatar ${{ steps.package.outputs.version }}
+          files: |
+            release/${{ steps.package.outputs.name }}-${{ steps.package.outputs.version }}.zip
+            UnityVPM/package.json

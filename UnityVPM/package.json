@@ -1,0 +1,18 @@
+{
+  "name": "com.theroughy.handoflesser.modular-avatar",
+  "displayName": "HandOfLesser - Modular Avatar",
+  "version": "1.0.0",
+  "unity": "2022.3",
+  "description": "Non-destructive Modular Avatar installation for HandOfLesser VRChat hand tracking.",
+  "license": "MIT",
+  "author": {
+    "name": "TheRoughy",
+    "url": "https://github.com/TheRoughy/HandOfLesser"
+  },
+  "url": "https://github.com/TheRoughy/HandOfLesser",
+  "documentationUrl": "https://github.com/TheRoughy/HandOfLesser#vrchat-osc",
+  "vpmDependencies": {
+    "com.vrchat.avatars": ">=3.10.3 <4.0.0",
+    "nadena.dev.modular-avatar": ">=1.16.2 <2.0.0"
+  }
+}

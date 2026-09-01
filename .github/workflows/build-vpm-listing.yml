@@ -1,0 +1,56 @@
+name: Build VPM Repository Listing
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - source.json
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-listing:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out VPM listing tools
+        uses: actions/checkout@v4
+        with:
+          repository: vrchat-community/package-list-action
+          path: ci
+          clean: false
+
+      - name: Build package listing
+        run: ci/build.cmd BuildMultiPackageListing --root ci --list-publish-directory "$GITHUB_WORKSPACE/Website"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload listing
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Website
+
+      - name: Deploy listing
+        id: deployment
+        uses: actions/deploy-pages@v4

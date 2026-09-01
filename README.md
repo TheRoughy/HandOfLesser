@@ -59,17 +59,12 @@ Most options in the interface have tooltips explaining what they do.
 
 ## VRChat OSC
 
-Install `HandOfLesser.unitypackage` in your Unity VRChat avatar project.
+The recommended setup uses the HandOfLesser Modular Avatar package. Add <https://theroughy.github.io/HandOfLesser/index.json> as a VCC repository and install `HandOfLesser - Modular Avatar` in the avatar project.
+Drag the included `HandOfLesser_ModularAvatar` prefab under the avatar root.
 
-In Unity, open the `Hand Of Lesser` window and press each button in order.
+You can also copy the `Unity/Assets/HandOfLesser` folder from this git repository into your unity project's Assets folder and manually generate and assign the files, without using modular avatar. You will find the genrator in the `Tools` menu.
 
-This generates:
-
-- `Assets\HandOfLesser\generated\handoflesser_parameters`
-- `Assets\HandOfLesser\generated\handoflesser_controller`
-
-Assign the generated parameters to your avatar parameters, and the generated controller to your gesture layer. 
-Combining these with existing parameters and controllers is left as an exercise for the user.
+Due to the number of synced parameters and generally complexity of the setup, it is recommended you use a dedicated avatar for this rather than attempting to toggle HandOfLesser integration on and off. To avoid confusion it is set up to always replace VRChat's own hand tracking, evne if "Avatar uses finger tracking" is enabled in the VRChat settings. 
 
 You can adjust finger bend and curl behavior in the `VRChat` tab of the HandOfLesser interface.
 
@@ -96,7 +91,11 @@ You can build directly with cmake, but OpenVR does build with newer CMake versio
 
 `build_installer.bat` generates the installer from files in `./output` and downloads the Microsoft Visual C++ Redistributable into a local build cache. It copies the installer and a standalone `HandOfLesser.exe` desktop interface to `./distribution`.
 
-Use Unity to export the contents of `./Unity` as `HandOfLesser.UnityPackage`, then copy it into `./distribution` manually.
+In a Unity project containing the VRChat SDK and Modular Avatar, import `./Unity/Assets/HandOfLesser` and run `Tools` > `HandOfLesser` > `Build Modular Avatar Package Assets`. This generates the generic controller, animation container, and prefab with its Modular Avatar parameter declarations.
+
+`build_unity_vpm_package.ps1` stages those generated runtime assets as a self-contained VPM zip in `./distribution`. The GitHub release workflow publishes that zip, and the package-listing workflow deploys the VCC repository to GitHub Pages.
+
+Before publishing the first VPM release, configure GitHub Pages to use `GitHub Actions` as its source. Run the `Release Unity VPM Package` workflow; publishing the release automatically rebuilds the package listing.
 
 ## Developer Setup
 

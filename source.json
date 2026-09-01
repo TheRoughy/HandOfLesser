@@ -1,0 +1,18 @@
+{
+  "name": "HandOfLesser Packages",
+  "id": "com.theroughy.handoflesser",
+  "url": "https://theroughy.github.io/HandOfLesser/index.json",
+  "author": {
+    "name": "TheRoughy",
+    "url": "https://github.com/TheRoughy"
+  },
+  "description": "VRChat avatar packages for HandOfLesser.",
+  "infoLink": {
+    "url": "https://github.com/TheRoughy/HandOfLesser",
+    "text": "View on GitHub"
+  },
+  "githubRepos": [
+    "TheRoughy/HandOfLesser"
+  ],
+  "packages": []
+}
