@@ -23,6 +23,9 @@ Download and run the installer from Releases. This installs the SteamVR add-on a
 
 Hand and body tracking must be enabled on the Quest.
 
+`HandOfLesser.exe` is also provided as a standalone application, but is only useful for VRChat OSC with Virtual Desktop, with degraded results. 
+Installing the complete driver is highly recommended.
+
 ### Virtual Desktop
 
 Enable `Forward tracking data` inside Virtual Desktop's Quest interface. The option is in the `Streaming` section.
@@ -70,12 +73,6 @@ You can adjust finger bend and curl behavior in the `VRChat` tab of the HandOfLe
 
 ## Known Issues
 
-### Virtual Desktop hand tracking is choppy
-
-Running VDXR alongside Virtual Desktop's SteamVR Add-on results in each only receiving half the data. They are aware and may eventually fix the issue. 
-
-Workaround: Disable the Virtual Desktop SteamVR add-on and launch SteamVR using the "Enter VR" button in Virtual Desktop's Quest interface. 
-
 ### Simultaneous tracking can switch back to controllers unexpectedly
 
 We guess whether hand or controller tracking is in use by how far away from the controller position the hands are; if they are the same you are using the controllers. 
@@ -89,13 +86,13 @@ Clone recursively and build with Visual Studio 2022.
 
 You can build directly with cmake, but OpenVR does build with newer CMake versions, so Visual Studio 2022 is recommended.
 
-`build_installer.bat` generates the installer from files in `./output` and downloads the Microsoft Visual C++ Redistributable into a local build cache. It copies the installer and a standalone `HandOfLesser.exe` desktop interface to `./distribution`.
+`build_all.bat` does all the things.
 
-In a Unity project containing the VRChat SDK and Modular Avatar, import `./Unity/Assets/HandOfLesser` and run `Tools` > `HandOfLesser` > `Build Modular Avatar Package Assets`. This generates the generic controller, animation container, and prefab with its Modular Avatar parameter declarations.
+`build.bat` builds the application and driver.
+`build_installer.bat` generates the installer from files in `./output` and downloads the Microsoft Visual C++ Redistributable into a local build cache.
+`build_unity_vpm_package.bat` generates the Modular Avatar VPM package.
 
-`build_unity_vpm_package.ps1` stages those generated runtime assets as a self-contained VPM zip in `./distribution`. The GitHub release workflow publishes that zip, and the package-listing workflow deploys the VCC repository to GitHub Pages.
-
-Before publishing the first VPM release, configure GitHub Pages to use `GitHub Actions` as its source. Run the `Release Unity VPM Package` workflow; publishing the release automatically rebuilds the package listing.
+All files for distribution are output into `distribution/`
 
 ## Developer Setup
 
