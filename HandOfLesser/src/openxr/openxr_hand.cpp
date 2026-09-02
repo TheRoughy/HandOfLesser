@@ -402,14 +402,19 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 					= (float)(time - this->mDirectHandTrackingStartTime) / 1000000000.0f;
 				resumeBlendAlpha = std::clamp(elapsedSeconds / blendDurationSeconds, 0.0f, 1.0f);
 
-				Eigen::Vector3f bodyPalmPosition = toEigenVector(bodyPalmJoint->pose.position);
-				Eigen::Quaternionf bodyPalmOrientation
-					= toEigenQuaternion(bodyPalmJoint->pose.orientation);
+				// At full hand weight, keep the hand pose untouched. Evaluating the equivalent
+				// interpolation can still propagate invalid or extremely large body values.
+				if (resumeBlendAlpha < 1.0f)
+				{
+					Eigen::Vector3f bodyPalmPosition = toEigenVector(bodyPalmJoint->pose.position);
+					Eigen::Quaternionf bodyPalmOrientation
+						= toEigenQuaternion(bodyPalmJoint->pose.orientation);
 
-				newPalmPosition
-					= bodyPalmPosition + resumeBlendAlpha * (newPalmPosition - bodyPalmPosition);
-				newPalmOrientation
-					= bodyPalmOrientation.slerp(resumeBlendAlpha, newPalmOrientation);
+					newPalmPosition = bodyPalmPosition
+								  + resumeBlendAlpha * (newPalmPosition - bodyPalmPosition);
+					newPalmOrientation
+						= bodyPalmOrientation.slerp(resumeBlendAlpha, newPalmOrientation);
+				}
 			}
 		}
 
