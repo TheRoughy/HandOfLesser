@@ -2,15 +2,6 @@ name: Build VPM Repository Listing
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
-      - main
-    paths:
-      - source.json
-  release:
-    types:
-      - published
 
 permissions:
   contents: read
@@ -31,6 +22,28 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Check for a published VPM package
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const source = JSON.parse(fs.readFileSync('source.json', 'utf8'));
+            const manifest = JSON.parse(fs.readFileSync('UnityVPM/package.json', 'utf8'));
+            let found = false;
+            for (const repo of source.githubRepos) {
+              const [owner, name] = repo.split('/');
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo: name });
+              if (!releases.some(release => !release.draft)) {
+                core.setFailed(`No published releases in ${repo}. Publish the VPM package before building the listing.`);
+                return;
+              }
+              found ||= releases.some(release => !release.draft && release.assets.some(asset =>
+                asset.name.startsWith(`${manifest.name}-`) && asset.name.endsWith('.zip')));
+            }
+            if (!found) {
+              core.setFailed('No published VPM package ZIP found. Publish the VPM package before building the listing.');
+            }
+
       - name: Check out VPM listing tools
         uses: actions/checkout@v4
         with:
@@ -38,8 +51,17 @@ jobs:
           path: ci
           clean: false
 
+      - name: Check out VPM website templates
+        uses: actions/checkout@v4
+        with:
+          repository: vrchat-community/template-package-listing
+          path: listing-template
+
+      - name: Prepare website templates
+        run: cp -R listing-template/Website Website
+
       - name: Build package listing
-        run: ci/build.cmd BuildMultiPackageListing --root ci --list-publish-directory "$GITHUB_WORKSPACE/Website"
+        run: ci/build.cmd BuildRepoListing --root ci --list-publish-directory "$GITHUB_WORKSPACE/Website"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
