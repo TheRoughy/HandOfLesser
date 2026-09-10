@@ -683,6 +683,18 @@ void HOL::UserInterface::buildBindings()
 		showWrappedTooltip("Maximum finger distance at which a pinch is fully active.");
 	}
 
+	int pinchPlaneThresholdMM = Config.input.pinchPlaneThresholdMM;
+	if (ImGui::InputInt("Pinch Plane Threshold (mm)", &pinchPlaneThresholdMM))
+	{
+		Config.input.pinchPlaneThresholdMM = std::max(0, pinchPlaneThresholdMM);
+		rebuildActions = true;
+	}
+	if (ImGui::IsItemHovered())
+	{
+		showWrappedTooltip(
+			"Minimum distance other fingertips must be above the pinching finger's plane.");
+	}
+
 	float lookAtFovDegrees = Config.input.lookAtFovDegrees;
 	if (ImGui::InputFloat("Look-at FoV (deg)", &lookAtFovDegrees, 1.0f, 5.0f, "%.1f"))
 	{
@@ -724,6 +736,7 @@ void HOL::UserInterface::buildBindings()
 		Config.input.holdDurationMS = defaults.holdDurationMS;
 		Config.input.gateLagTimeMS = defaults.gateLagTimeMS;
 		Config.input.pinchDistanceMM = defaults.pinchDistanceMM;
+		Config.input.pinchPlaneThresholdMM = defaults.pinchPlaneThresholdMM;
 		Config.input.lookAtFovDegrees = defaults.lookAtFovDegrees;
 		Config.input.inViewFovDegrees = defaults.inViewFovDegrees;
 		Config.input.palmFacingFovDegrees = defaults.palmFacingFovDegrees;

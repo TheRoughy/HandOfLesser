@@ -10,6 +10,7 @@ namespace HOL::Gesture::AboveBelowCurlPlaneGesture
 		FingerType planeFinger;
 		FingerType otherFinger;
 		HandSide side;
+		float minimumDistanceAbovePlane = 0.0f;
 	};
 
 	class Gesture : public BaseGesture::Gesture

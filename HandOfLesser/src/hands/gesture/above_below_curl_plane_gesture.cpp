@@ -29,13 +29,14 @@ namespace HOL::Gesture
 		Eigen::Vector3f planeNormal = palmX.cross(planeTipJoint - planeKnuckleJoint);
 		planeNormal.normalize();
 
-		// Dot product sign decides whether the other fingertip is above or below the plane.
+		// The normalized plane normal makes this dot product the perpendicular distance
+		// from the pinch plane, rather than only indicating which side the fingertip is on.
 		auto otherTipJoint = getJointPosition(data.joints[this->parameters.side],
 											  getFingerTip(this->parameters.otherFinger));
 
 		Eigen::Vector3f otherVector = otherTipJoint - planeTipJoint;
 
-		return planeNormal.dot(otherVector) > 0.0f ? 1.0f : 0.0f;
+		return planeNormal.dot(otherVector) > this->parameters.minimumDistanceAbovePlane;
 	}
 }
 

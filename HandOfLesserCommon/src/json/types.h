@@ -232,6 +232,7 @@ namespace HOL
 				 {"holdDurationMS", settings.holdDurationMS},
 				 {"gateLagTimeMS", settings.gateLagTimeMS},
 				 {"pinchDistanceMM", settings.pinchDistanceMM},
+				 {"pinchPlaneThresholdMM", settings.pinchPlaneThresholdMM},
 				 {"inViewFovDegrees", settings.inViewFovDegrees},
 				 {"lookAtFovDegrees", settings.lookAtFovDegrees},
 				 {"palmFacingFovDegrees", settings.palmFacingFovDegrees},
@@ -248,6 +249,8 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "holdDurationMS", settings.holdDurationMS);
 			nlohmann::get_to_if_present(j, "gateLagTimeMS", settings.gateLagTimeMS);
 			nlohmann::get_to_if_present(j, "pinchDistanceMM", settings.pinchDistanceMM);
+			nlohmann::get_to_if_present(
+				j, "pinchPlaneThresholdMM", settings.pinchPlaneThresholdMM);
 			if (j.contains("inViewFovDegrees"))
 			{
 				nlohmann::get_to_if_present(j, "inViewFovDegrees", settings.inViewFovDegrees);

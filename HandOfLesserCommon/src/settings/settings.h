@@ -299,6 +299,7 @@ namespace HOL
 			int holdDurationMS = 1000;
 			int gateLagTimeMS = 10;
 			int pinchDistanceMM = 25;
+			int pinchPlaneThresholdMM = 5;
 			float inViewFovDegrees = 120.0f;
 			float lookAtFovDegrees = 45.0f;
 			float palmFacingFovDegrees = 80.0f;

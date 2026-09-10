@@ -53,6 +53,8 @@ namespace HOL::Gesture::OpenHandPinchGesture
 			gesture->parameters.otherFinger = otherFinger;
 			gesture->parameters.planeFinger = this->parameters.pinchFinger;
 			gesture->parameters.side = this->parameters.side;
+			gesture->parameters.minimumDistanceAbovePlane
+				= HOL::Config.input.pinchPlaneThresholdMM / 1000.0f;
 
 			this->mCurlPlaneGestures.push_back(gesture);
 		}
