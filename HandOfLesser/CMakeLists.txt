@@ -28,6 +28,7 @@
 	src/hands/gesture/base_gesture.cpp
 	src/hands/gesture/proximity_gesture.cpp
 	src/hands/gesture/above_below_curl_plane_gesture.cpp
+	src/hands/gesture/directional_pinch_gesture.cpp
 	src/hands/gesture/open_hand_pinch_gesture.cpp
 	src/hands/gesture/hold_gesture.cpp
 	src/hands/gesture/facing_gesture.cpp

@@ -4,8 +4,8 @@
 #include <HandOfLesserCommon.h>
 #include <vector>
 #include "above_below_curl_plane_gesture.h"
+#include "directional_pinch_gesture.h"
 #include "gate_gesture.h"
-#include "proximity_gesture.h"
 
 
 namespace HOL::Gesture::OpenHandPinchGesture
@@ -33,7 +33,7 @@ namespace HOL::Gesture::OpenHandPinchGesture
 	private:
 		std::vector<std::shared_ptr<AboveBelowCurlPlaneGesture::Gesture>> mCurlPlaneGestures;
 		std::shared_ptr<GateGesture::Gesture> mGateGesture;
-		std::shared_ptr<ProximityGesture> mProxGesture;
+		std::shared_ptr<DirectionalPinchGesture::Gesture> mDirectionalPinchGesture;
 
 	protected:
 		float evaluateInternal(GestureData data) override;

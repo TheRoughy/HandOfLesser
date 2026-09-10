@@ -27,12 +27,14 @@ namespace HOL::Gesture::OpenHandPinchGesture
 		// Pinch proximity
 		////////////////////
 
-		this->mProxGesture = ProximityGesture::Create();
-		this->mProxGesture->setup(this->parameters.pinchFinger,
-								  this->parameters.side,
-								  FingerThumb,
-								  this->parameters.side,
-								  HOL::Config.input.pinchDistanceMM / 1000.0f);
+		this->mDirectionalPinchGesture = DirectionalPinchGesture::Gesture::Create();
+		this->mDirectionalPinchGesture->parameters.pinchFinger = this->parameters.pinchFinger;
+		this->mDirectionalPinchGesture->parameters.side = this->parameters.side;
+		this->mDirectionalPinchGesture->parameters.pinchDistance
+			= HOL::Config.input.pinchDistanceMM / 1000.0f;
+		this->mDirectionalPinchGesture->parameters.directionThreshold
+			= HOL::Config.input.pinchDirectionThresholdMM / 1000.0f;
+		this->mDirectionalPinchGesture->setup();
 
 		/////////////////////////////////////
 		// Other fingers above pinch plane
@@ -53,7 +55,7 @@ namespace HOL::Gesture::OpenHandPinchGesture
 			gesture->parameters.otherFinger = otherFinger;
 			gesture->parameters.planeFinger = this->parameters.pinchFinger;
 			gesture->parameters.side = this->parameters.side;
-			gesture->parameters.minimumDistanceAbovePlane
+			gesture->parameters.minimumDistanceFromPlane
 				= HOL::Config.input.pinchPlaneThresholdMM / 1000.0f;
 
 			this->mCurlPlaneGestures.push_back(gesture);
@@ -70,7 +72,7 @@ namespace HOL::Gesture::OpenHandPinchGesture
 		this->mGateGesture = GateGesture::Gesture::Create();
 		this->mGateGesture->parameters.allowedLagTime
 			= std::chrono::milliseconds(HOL::Config.input.gateLagTimeMS);
-		this->mGateGesture->setTriggerGesture(this->mProxGesture);
+		this->mGateGesture->setTriggerGesture(this->mDirectionalPinchGesture);
 		this->mGateGesture->setModifierGesture(abovePlaneGesture);
 
 		this->mSubGestures.clear();

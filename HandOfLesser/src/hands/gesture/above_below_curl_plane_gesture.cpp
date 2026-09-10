@@ -35,8 +35,14 @@ namespace HOL::Gesture
 											  getFingerTip(this->parameters.otherFinger));
 
 		Eigen::Vector3f otherVector = otherTipJoint - planeTipJoint;
+		float signedDistance = planeNormal.dot(otherVector);
 
-		return planeNormal.dot(otherVector) > this->parameters.minimumDistanceAbovePlane;
+		if (this->parameters.planeSide == AboveBelowCurlPlaneGesture::PlaneSide::Below)
+		{
+			return signedDistance < -this->parameters.minimumDistanceFromPlane;
+		}
+
+		return signedDistance > this->parameters.minimumDistanceFromPlane;
 	}
 }
 

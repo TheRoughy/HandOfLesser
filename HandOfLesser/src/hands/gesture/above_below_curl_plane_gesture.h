@@ -5,12 +5,19 @@
 
 namespace HOL::Gesture::AboveBelowCurlPlaneGesture
 {
+	enum class PlaneSide
+	{
+		Above,
+		Below
+	};
+
 	struct Parameters
 	{
 		FingerType planeFinger;
 		FingerType otherFinger;
 		HandSide side;
-		float minimumDistanceAbovePlane = 0.0f;
+		PlaneSide planeSide = PlaneSide::Above;
+		float minimumDistanceFromPlane = 0.0f;
 	};
 
 	class Gesture : public BaseGesture::Gesture
