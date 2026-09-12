@@ -238,6 +238,11 @@ XrBodyJointLocationFB* OpenXRBody::getLastJointLocations()
 	return this->mCorrectedJointLocations;
 }
 
+const XrBodyJointLocationFB* OpenXRBody::getLastJointLocations() const
+{
+	return this->mCorrectedJointLocations;
+}
+
 bool OpenXRBody::isAvailable() const
 {
 	return mBodyTracker != nullptr || mUsingExternalBody;

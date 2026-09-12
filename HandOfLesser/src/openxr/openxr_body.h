@@ -23,6 +23,7 @@ public:
 								  const HOL::BodyTrackingSample* externalSample = nullptr);
 
 	XrBodyJointLocationFB* getLastJointLocations();
+	const XrBodyJointLocationFB* getLastJointLocations() const;
 	bool isAvailable() const;
 	XrBodyTrackerFB getBodyTrackerFB();
 	bool getHeadPose(HOL::PoseLocation& pose) const;

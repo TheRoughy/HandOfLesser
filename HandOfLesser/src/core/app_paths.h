@@ -52,6 +52,11 @@ namespace HOL::Paths
 		return ensureAppDataDirectory() / "imgui.ini";
 	}
 
+	inline std::filesystem::path getVisualizerSnapshotsFilePath()
+	{
+		return ensureAppDataDirectory() / "visualizer_snapshots.json";
+	}
+
 	inline std::filesystem::path getCrashDirectory()
 	{
 		return ensureAppDataDirectory() / "crashes";

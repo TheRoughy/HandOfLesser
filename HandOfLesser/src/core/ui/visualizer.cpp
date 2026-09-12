@@ -1,17 +1,97 @@
 #include "visualizer.h"
+#include "visualizer_json.h"
 
 #include "imgui.h"
 #include <HandOfLesserCommon.h>
+#include <openxr/openxr_reflection.h>
+#include "src/core/app_paths.h"
 #include "src/core/settings_global.h"
+#include "src/core/state_global.h"
 #include "src/core/ui/display_global.h"
 #include <src/core/HandOfLesserCore.h>
+#include "src/openxr/HandTracking.h"
+#include "src/openxr/body_tracking.h"
+#include "src/openxr/XrUtils.h"
+#include "src/openxr/xr_joint_utils.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <numbers>
 
 namespace HOL
 {
+	namespace
+	{
+		constexpr int SnapshotFileVersion = 2;
+		constexpr float HoverRadius = 9.0f;
+
+		const char* providerName(HOL::state::TrackingProvider provider)
+		{
+			switch (provider)
+			{
+				case HOL::state::TrackingProvider::OpenXR:
+					return "OpenXR";
+				case HOL::state::TrackingProvider::SteamVRDriver:
+					return "SteamVR driver";
+				case HOL::state::TrackingProvider::VirtualDesktopSharedMemory:
+					return "VD shared memory";
+			}
+			return "Unknown";
+		}
+
+		const char* handJointName(int joint)
+		{
+			switch (joint)
+			{
+#define HOL_HAND_JOINT_CASE(name, value) case value: return #name;
+				XR_LIST_ENUM_XrHandJointEXT(HOL_HAND_JOINT_CASE)
+#undef HOL_HAND_JOINT_CASE
+			}
+			return "Unknown hand joint";
+		}
+
+		const char* bodyJointName(int joint)
+		{
+			switch (joint)
+			{
+#define HOL_BODY_JOINT_CASE(name, value) case value: return #name;
+				XR_LIST_ENUM_XrBodyJointFB(HOL_BODY_JOINT_CASE)
+#undef HOL_BODY_JOINT_CASE
+			}
+			return "Unknown body joint";
+		}
+
+		ImU32 snapshotColor(size_t index, int alpha = 210)
+		{
+			constexpr std::array<std::array<int, 3>, 8> Colors = {{
+				{255, 90, 110},
+				{70, 210, 255},
+				{255, 210, 70},
+				{100, 235, 140},
+				{215, 125, 255},
+				{255, 145, 65},
+				{90, 235, 220},
+				{235, 120, 190},
+			}};
+			const auto& color = Colors[index % Colors.size()];
+			return IM_COL32(color[0], color[1], color[2], alpha);
+		}
+
+		std::string formatCaptureTime(int64_t timestamp)
+		{
+			const std::time_t time = static_cast<std::time_t>(timestamp);
+			std::tm localTime{};
+			localtime_s(&localTime, &time);
+			char buffer[20]{};
+			std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localTime);
+			return buffer;
+		}
+	} // namespace
+
 	Visualizer::Visualizer()
 	{
 		this->mRawZoom = 5;
@@ -28,6 +108,10 @@ namespace HOL
 		this->mActiveDrawQueue = &this->mDrawSwap0;
 		this->mSwapQueue = &this->mDrawSwap1;
 		this->mDrawQueue = &this->mDrawSwap2;
+
+		this->mTrackingWriteFrame = &this->mTrackingFrame0;
+		this->mTrackingPendingFrame = &this->mTrackingFrame1;
+		this->mTrackingDisplayFrame = &this->mTrackingFrame2;
 	}
 
 	ImU32 Visualizer::fadeColor(ImU32 baseColor, float alpha)
@@ -41,6 +125,7 @@ namespace HOL
 	{
 		// Must be called on UI thread!
 		this->mUiThreadId = std::this_thread::get_id();
+		loadSnapshots();
 	}
 
 	void Visualizer::centerTo(Eigen::Vector3f center)
@@ -59,6 +144,65 @@ namespace HOL
 	void Visualizer::setActive(bool active)
 	{
 		this->mIsActive = active;
+	}
+
+	void Visualizer::publishTrackingFrame(const HOL::OpenXR::HandTracking& handTracking,
+									  const HOL::OpenXR::BodyTracking& bodyTracking)
+	{
+		if (!mIsActive)
+		{
+			return;
+		}
+
+		auto& frame = *mTrackingWriteFrame;
+		frame = {};
+		frame.valid = true;
+		frame.runtimeName = HOL::state::Runtime.runtimeName;
+		frame.provider = HOL::state::Runtime.trackingProvider;
+
+		for (int side = 0; side < HOL::HandSide_MAX; side++)
+		{
+			const auto handSide = static_cast<HOL::HandSide>(side);
+			const OpenXRHand* hand = handTracking.getHand(handSide);
+			const HOL::HandPose& pose = handTracking.getHandPose(handSide);
+			auto& handFrame = frame.hands[side];
+			handFrame.active = pose.active;
+			handFrame.valid = pose.poseValid;
+			handFrame.tracked = pose.poseTracked;
+			std::copy_n(
+				hand->getLastJointLocations(), XR_HAND_JOINT_COUNT_EXT, handFrame.joints.begin());
+
+			auto& controller = frame.controllers[side];
+			controller.active = pose.active;
+			controller.valid = pose.poseValid;
+			controller.tracked = pose.poseTracked;
+			controller.pose = pose.controllerLocation;
+		}
+
+		const OpenXRBody& body = bodyTracking.getBodyTracker();
+		frame.bodyAvailable = body.isAvailable();
+		frame.bodyActive = body.active;
+		frame.bodyConfidence = body.confidence;
+		std::copy_n(
+			body.getLastJointLocations(), XR_BODY_JOINT_COUNT_FB, frame.bodyJoints.begin());
+		frame.bodyTrackerLocations = bodyTracking.getLastBodyTrackerLocations();
+
+		// The producer and UI each retain their own frame. Only pointer ownership moves while locked,
+		// so neither thread reads memory while the other is writing it.
+		std::scoped_lock lock(mTrackingFrameLock);
+		std::swap(mTrackingWriteFrame, mTrackingPendingFrame);
+		mTrackingFramePending = true;
+	}
+
+	void Visualizer::consumeTrackingFrame()
+	{
+		std::scoped_lock lock(mTrackingFrameLock);
+		if (!mTrackingFramePending)
+		{
+			return;
+		}
+		std::swap(mTrackingPendingFrame, mTrackingDisplayFrame);
+		mTrackingFramePending = false;
 	}
 
 	void Visualizer::swapOuterDrawQueue()
@@ -87,6 +231,7 @@ namespace HOL
 	void Visualizer::drawVisualizer()
 	{
 		this->swapInnerDrawQueue();
+		consumeTrackingFrame();
 
 		drawAxis();
 
@@ -113,6 +258,7 @@ namespace HOL
 		*/
 
 		calculateProjectionMatrix();
+		drawTrackingFrames();
 
 		// Controllers
 		updateControllerTrails();
@@ -128,6 +274,44 @@ namespace HOL
 		// handle input and draw widgets after drawing scene,
 		// so we know the area we don't want to be interactable
 		ImGui::SliderFloat("FoV", &this->mFov, 10.f, 179.f, "%.3f");
+		if (!mTrackingDisplayFrame->valid)
+		{
+			ImGui::BeginDisabled();
+		}
+		if (ImGui::Button("Snapshot"))
+		{
+			captureSnapshot();
+		}
+		if (!mTrackingDisplayFrame->valid)
+		{
+			ImGui::EndDisabled();
+		}
+		ImGui::SameLine();
+		if (mSnapshots.empty())
+		{
+			ImGui::BeginDisabled();
+		}
+		if (ImGui::Button("Clear Snapshots"))
+		{
+			clearSnapshots();
+		}
+		if (mSnapshots.empty())
+		{
+			ImGui::EndDisabled();
+		}
+		ImGui::SameLine();
+		ImGui::Text("%zu snapshot%s", mSnapshots.size(), mSnapshots.size() == 1 ? "" : "s");
+		for (size_t index = 0; index < mSnapshots.size(); index++)
+		{
+			const auto& snapshot = mSnapshots[index];
+			const ImVec4 color = ImGui::ColorConvertU32ToFloat4(snapshotColor(index));
+			ImGui::TextColored(color,
+							   "Snapshot %zu: %s / %s, %s",
+							   index + 1,
+							   snapshot.frame.runtimeName.c_str(),
+							   providerName(snapshot.frame.provider),
+							   formatCaptureTime(snapshot.capturedAt).c_str());
+		}
 		if (ImGui::Checkbox("Follow left   ", &HOL::Config.visualizer.followLeftHand))
 		{
 			if (Config.visualizer.followLeftHand)
@@ -172,6 +356,7 @@ namespace HOL
 		uiBounds.x = ImGui::GetCursorScreenPos().x;
 
 		handleInput(uiBounds);
+		drawTrackingHoverInfo();
 
 		ImGui::GetWindowDrawList()->AddCircleFilled(
 			ImVec2((upperLeft.x + lowerRight.x) / 2.0f, (upperLeft.y + lowerRight.y) / 2.0f),
@@ -179,6 +364,436 @@ namespace HOL
 			IM_COL32(23, 139, 255, 255)); // Green dot
 
 		ImGui::EndChild();
+	}
+
+	void Visualizer::drawTrackingFrames()
+	{
+		mHoverTargets.clear();
+		if (mTrackingDisplayFrame->valid)
+		{
+			drawTrackingFrame(*mTrackingDisplayFrame, -1);
+		}
+		for (size_t index = 0; index < mSnapshots.size(); index++)
+		{
+			drawTrackingFrame(mSnapshots[index].frame, static_cast<int>(index));
+		}
+	}
+
+	void Visualizer::drawTrackingFrame(const TrackingVisualizationFrame& frame,
+									   int snapshotIndex)
+	{
+		const bool snapshot = snapshotIndex >= 0;
+		const ImU32 snapshotPointColor
+			= snapshot ? snapshotColor(static_cast<size_t>(snapshotIndex)) : 0;
+		const ImU32 snapshotLineColor
+			= snapshot ? snapshotColor(static_cast<size_t>(snapshotIndex), 180) : 0;
+		const ImU32 handPointColor
+			= snapshot ? snapshotPointColor : IM_COL32(155, 155, 155, 255);
+		const ImU32 handLineColor
+			= snapshot ? snapshotLineColor : IM_COL32(255, 255, 255, 255);
+
+		for (int side = 0; side < HOL::HandSide_MAX; side++)
+		{
+			const auto& hand = frame.hands[side];
+			for (int jointIndex = 0; jointIndex < XR_HAND_JOINT_COUNT_EXT; jointIndex++)
+			{
+				const auto& joint = hand.joints[jointIndex];
+				const Eigen::Vector3f position = OpenXR::toEigenVector(joint.pose.position);
+				submitPoint(position, handPointColor, snapshot ? 4.0f : 5.0f);
+				mHoverTargets.push_back({HoverType::HandJoint, side, jointIndex, position});
+			}
+
+			for (int finger = 0; finger < FingerType_MAX; finger++)
+			{
+				const XrHandJointEXT rootJoint
+					= OpenXR::getRootJoint(static_cast<FingerType>(finger));
+				for (int jointOffset = 0; jointOffset < 4; jointOffset++)
+				{
+					const auto& joint = hand.joints[rootJoint + jointOffset];
+					const auto& nextJoint = hand.joints[rootJoint + jointOffset + 1];
+					submitLine(OpenXR::toEigenVector(joint.pose.position),
+							   OpenXR::toEigenVector(nextJoint.pose.position),
+							   handLineColor,
+							   snapshot ? 1.5f : 2.0f);
+				}
+			}
+
+			const auto& palm = hand.joints[XR_HAND_JOINT_PALM_EXT];
+			if (Config.visualizer.showHandTrackingPalmAxes
+				&& (palm.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
+			{
+				submitOrientationAxes(OpenXR::toEigenVector(palm.pose.position),
+								  OpenXR::toEigenQuaternion(palm.pose.orientation),
+								  0.120f,
+								  snapshot ? 3.0f : 6.0f);
+			}
+
+			if (Config.visualizer.showHandTrackingJointAxes)
+			{
+				for (const auto& joint : hand.joints)
+				{
+					const bool poseValid
+						= (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
+						  && (joint.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
+					if (poseValid)
+					{
+						submitOrientationAxes(OpenXR::toEigenVector(joint.pose.position),
+										  OpenXR::toEigenQuaternion(joint.pose.orientation),
+										  0.040f,
+										  snapshot ? 1.0f : 2.0f);
+					}
+				}
+			}
+
+			if (!snapshot)
+			{
+				if ((side == HOL::LeftHand && Config.visualizer.followLeftHand)
+					|| (side == HOL::RightHand && Config.visualizer.followRightHand))
+				{
+					centerTo(OpenXR::toEigenVector(palm.pose.position));
+				}
+			}
+		}
+
+		for (int jointIndex = 0; jointIndex < XR_BODY_JOINT_COUNT_FB; jointIndex++)
+		{
+			const auto& joint = frame.bodyJoints[jointIndex];
+			const bool valid
+				= (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+			if (!valid && (!frame.bodyAvailable || !frame.bodyActive))
+			{
+				continue;
+			}
+			const bool tracked
+				= (joint.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) != 0;
+			ImU32 color = snapshotPointColor;
+			if (!snapshot)
+			{
+				color = valid ? (tracked ? IM_COL32(0, 255, 0, 150)
+									 : IM_COL32(255, 180, 0, 170))
+							  : IM_COL32(255, 0, 0, 150);
+			}
+			const Eigen::Vector3f position = OpenXR::toEigenVector(joint.pose.position);
+			submitPoint(position, color, snapshot ? 5.0f : 7.0f);
+			mHoverTargets.push_back({HoverType::BodyJoint, 0, jointIndex, position});
+		}
+
+		if (!snapshot)
+		{
+			for (XrBodyJointFB palmIndex :
+				 {XR_BODY_JOINT_LEFT_HAND_PALM_FB, XR_BODY_JOINT_RIGHT_HAND_PALM_FB})
+			{
+				const auto& palm = frame.bodyJoints[palmIndex];
+				const bool valid
+					= (palm.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+				const bool tracked
+					= (palm.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) != 0;
+				if (valid && !tracked)
+				{
+					submitPoint(OpenXR::toEigenVector(palm.pose.position),
+								IM_COL32(255, 255, 0, 255),
+								7.0f);
+				}
+			}
+		}
+
+		if (Config.visualizer.showBodyTrackingJointAxes)
+		{
+			for (const auto& joint : frame.bodyJoints)
+			{
+				const bool poseValid
+					= (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
+					  && (joint.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
+				if (poseValid)
+				{
+					submitOrientationAxes(OpenXR::toEigenVector(joint.pose.position),
+								  OpenXR::toEigenQuaternion(joint.pose.orientation),
+								  0.040f,
+								  snapshot ? 1.0f : 2.0f);
+				}
+			}
+		}
+
+		if (Config.visualizer.showBodyTrackingPalmAxes)
+		{
+			for (XrBodyJointFB palmIndex :
+				 {XR_BODY_JOINT_LEFT_HAND_PALM_FB, XR_BODY_JOINT_RIGHT_HAND_PALM_FB})
+			{
+				const auto& palm = frame.bodyJoints[palmIndex];
+				if (palm.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
+				{
+					submitOrientationAxes(OpenXR::toEigenVector(palm.pose.position),
+									  OpenXR::toEigenQuaternion(palm.pose.orientation),
+									  0.120f,
+									  snapshot ? 3.0f : 6.0f);
+				}
+			}
+		}
+
+		// Controller markers appear while snapshots exist so the app-side result can be compared
+		// without permanently adding more geometry to the normal visualizer.
+		if (!mSnapshots.empty())
+		{
+			for (int side = 0; side < HOL::HandSide_MAX; side++)
+			{
+				const auto& controller = frame.controllers[side];
+				if (!controller.active || !controller.valid)
+				{
+					continue;
+				}
+				const ImU32 color = snapshot ? snapshotPointColor
+					: (side == HOL::LeftHand ? IM_COL32(80, 180, 255, 255)
+											  : IM_COL32(255, 180, 80, 255));
+				submitPoint(controller.pose.position, color, 9.0f);
+				submitOrientationAxes(
+					controller.pose.position, controller.pose.orientation, 0.08f, 3.0f);
+				mHoverTargets.push_back(
+					{HoverType::Controller, side, 0, controller.pose.position});
+			}
+		}
+
+		if (!snapshot && Config.visualizer.showBodyTrackerAxes && frame.bodyAvailable)
+		{
+			for (const auto& location : frame.bodyTrackerLocations)
+			{
+				submitOrientationAxes(location.position, location.orientation, 0.060f, 3.0f);
+			}
+		}
+	}
+
+	void Visualizer::drawTrackingHoverInfo()
+	{
+		if (!ImGui::IsWindowHovered() || mHoverTargets.empty())
+		{
+			return;
+		}
+
+		const ImVec2 mouse = ImGui::GetMousePos();
+		const HoverTarget* hovered = nullptr;
+		float closestDistanceSquared = HoverRadius * HoverRadius;
+		for (const auto& target : mHoverTargets)
+		{
+			const ImVec2 point = projectToScreen(target.position);
+			const float dx = point.x - mouse.x;
+			const float dy = point.y - mouse.y;
+			const float distanceSquared = dx * dx + dy * dy;
+			if (distanceSquared <= closestDistanceSquared)
+			{
+				closestDistanceSquared = distanceSquared;
+				hovered = &target;
+			}
+		}
+		if (hovered == nullptr)
+		{
+			return;
+		}
+
+		struct PoseInfo
+		{
+			HOL::PoseLocation pose;
+			XrSpaceLocationFlags flags = 0;
+			bool active = true;
+			bool valid = true;
+			bool tracked = true;
+		};
+
+		const auto getPoseInfo = [&](const TrackingVisualizationFrame& frame,
+									 const HoverTarget& target,
+									 PoseInfo& info)
+		{
+			if (target.type == HoverType::HandJoint)
+			{
+				const auto& hand = frame.hands[target.side];
+				const auto& joint = hand.joints[target.joint];
+				info.pose.position = OpenXR::toEigenVector(joint.pose.position);
+				info.pose.orientation = OpenXR::toEigenQuaternion(joint.pose.orientation);
+				info.flags = joint.locationFlags;
+				info.active = hand.active;
+				info.valid = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+				info.tracked = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) != 0;
+			}
+			else if (target.type == HoverType::BodyJoint)
+			{
+				const auto& joint = frame.bodyJoints[target.joint];
+				info.pose.position = OpenXR::toEigenVector(joint.pose.position);
+				info.pose.orientation = OpenXR::toEigenQuaternion(joint.pose.orientation);
+				info.flags = joint.locationFlags;
+				info.active = frame.bodyActive;
+				info.valid = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+				info.tracked = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) != 0;
+			}
+			else
+			{
+				const auto& controller = frame.controllers[target.side];
+				info.pose = controller.pose;
+				info.active = controller.active;
+				info.valid = controller.valid;
+				info.tracked = controller.tracked;
+			}
+		};
+
+		const auto drawPose = [&](const char* label,
+							  const TrackingVisualizationFrame& frame,
+							  const PoseInfo& info,
+							  const PoseInfo* live,
+							  const ImVec4* color)
+		{
+			if (color != nullptr)
+			{
+				ImGui::TextColored(*color, "%s: %s / %s", label, frame.runtimeName.c_str(), providerName(frame.provider));
+			}
+			else
+			{
+				ImGui::Text("%s: %s / %s", label, frame.runtimeName.c_str(), providerName(frame.provider));
+			}
+			ImGui::Text("  Position: %.6f, %.6f, %.6f",
+						info.pose.position.x(),
+						info.pose.position.y(),
+						info.pose.position.z());
+			ImGui::Text("  Quaternion: %.6f, %.6f, %.6f, %.6f",
+						info.pose.orientation.x(),
+						info.pose.orientation.y(),
+						info.pose.orientation.z(),
+						info.pose.orientation.w());
+			if (info.pose.orientation.squaredNorm() > 0.000001f)
+			{
+				const Eigen::Vector3f euler = HOL::quaternionToEulerAngles(
+					info.pose.orientation.normalized())
+					* (180.0f / std::numbers::pi_v<float>);
+				ImGui::Text("  Euler XYZ: %.3f, %.3f, %.3f", euler.x(), euler.y(), euler.z());
+			}
+			ImGui::Text("  Active: %s  Valid: %s  Tracked: %s  Flags: 0x%llx",
+						info.active ? "yes" : "no",
+						info.valid ? "yes" : "no",
+						info.tracked ? "yes" : "no",
+						static_cast<unsigned long long>(info.flags));
+
+			if (live != nullptr)
+			{
+				const float translationMM = (info.pose.position - live->pose.position).norm() * 1000.0f;
+				float rotationDegrees = 0.0f;
+				if (info.pose.orientation.squaredNorm() > 0.000001f
+					&& live->pose.orientation.squaredNorm() > 0.000001f)
+				{
+					const float dot = std::clamp(
+						std::abs(info.pose.orientation.normalized().dot(
+							live->pose.orientation.normalized())),
+						0.0f,
+						1.0f);
+					rotationDegrees
+						= 2.0f * std::acos(dot) * (180.0f / std::numbers::pi_v<float>);
+				}
+				ImGui::Text("  Delta from live: %.3f mm, %.3f deg", translationMM, rotationDegrees);
+			}
+		};
+
+		ImGui::BeginTooltip();
+		if (hovered->type == HoverType::HandJoint)
+		{
+			ImGui::Text("%s hand, %s (%d)",
+						hovered->side == HOL::LeftHand ? "Left" : "Right",
+						handJointName(hovered->joint),
+						hovered->joint);
+		}
+		else if (hovered->type == HoverType::BodyJoint)
+		{
+			ImGui::Text("%s (%d)", bodyJointName(hovered->joint), hovered->joint);
+		}
+		else
+		{
+			ImGui::Text("%s app-side controller pose",
+						hovered->side == HOL::LeftHand ? "Left" : "Right");
+		}
+		ImGui::Separator();
+
+		PoseInfo liveInfo;
+		const PoseInfo* live = nullptr;
+		if (mTrackingDisplayFrame->valid)
+		{
+			getPoseInfo(*mTrackingDisplayFrame, *hovered, liveInfo);
+			live = &liveInfo;
+			drawPose("Live", *mTrackingDisplayFrame, liveInfo, nullptr, nullptr);
+		}
+		for (size_t index = 0; index < mSnapshots.size(); index++)
+		{
+			PoseInfo info;
+			getPoseInfo(mSnapshots[index].frame, *hovered, info);
+			const ImVec4 color = ImGui::ColorConvertU32ToFloat4(snapshotColor(index));
+			const std::string label = "Snapshot " + std::to_string(index + 1) + " ("
+				+ formatCaptureTime(mSnapshots[index].capturedAt) + ")";
+			drawPose(label.c_str(), mSnapshots[index].frame, info, live, &color);
+		}
+		ImGui::EndTooltip();
+	}
+
+	void Visualizer::captureSnapshot()
+	{
+		if (!mTrackingDisplayFrame->valid)
+		{
+			return;
+		}
+		TrackingVisualizationSnapshot snapshot;
+		snapshot.capturedAt = std::chrono::duration_cast<std::chrono::seconds>(
+			std::chrono::system_clock::now().time_since_epoch())
+						  .count();
+		snapshot.frame = *mTrackingDisplayFrame;
+		mSnapshots.push_back(std::move(snapshot));
+		saveSnapshots();
+	}
+
+	void Visualizer::clearSnapshots()
+	{
+		mSnapshots.clear();
+		std::error_code error;
+		std::filesystem::remove(HOL::Paths::getVisualizerSnapshotsFilePath(), error);
+		if (error)
+		{
+			std::cerr << "Failed to remove visualizer snapshots: " << error.message() << std::endl;
+		}
+	}
+
+	void Visualizer::saveSnapshots() const
+	{
+		const nlohmann::json root = {
+			{"version", SnapshotFileVersion},
+			{"snapshots", mSnapshots},
+		};
+
+		std::ofstream file(HOL::Paths::getVisualizerSnapshotsFilePath());
+		if (!file)
+		{
+			std::cerr << "Failed to open the visualizer snapshot file for writing." << std::endl;
+			return;
+		}
+		file << root.dump(2);
+	}
+
+	void Visualizer::loadSnapshots()
+	{
+		const std::filesystem::path path = HOL::Paths::getVisualizerSnapshotsFilePath();
+		std::ifstream file(path);
+		if (!file)
+		{
+			return;
+		}
+
+		try
+		{
+			nlohmann::json root;
+			file >> root;
+			if (root.at("version").get<int>() != SnapshotFileVersion)
+			{
+				std::cerr << "Ignoring visualizer snapshots from an unsupported version."
+						  << std::endl;
+				return;
+			}
+
+			mSnapshots = root.at("snapshots").get<std::vector<TrackingVisualizationSnapshot>>();
+		}
+		catch (const std::exception& ex)
+		{
+			std::cerr << "Failed to load visualizer snapshots: " << ex.what() << std::endl;
+		}
 	}
 
 	void Visualizer::drawPoints()
@@ -237,13 +852,13 @@ namespace HOL
 				trail.pop_front();
 			}
 
-			const auto& transform = HOL::display::HandTransform[side];
-			if (!transform.active || !transform.positionValid)
+			const auto& controller = mTrackingDisplayFrame->controllers[side];
+			if (!mTrackingDisplayFrame->valid || !controller.active || !controller.valid)
 			{
 				continue;
 			}
 
-			trail.push_back({transform.finalPose.position, now});
+			trail.push_back({controller.pose.position, now});
 		}
 	}
 

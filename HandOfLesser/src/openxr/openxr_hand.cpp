@@ -75,6 +75,11 @@ XrHandJointLocationEXT* OpenXRHand::getLastJointLocations()
 	return this->mJointLocations;
 }
 
+const XrHandJointLocationEXT* OpenXRHand::getLastJointLocations() const
+{
+	return this->mJointLocations;
+}
+
 const XrHandTrackingAimStateFB* OpenXRHand::getAimState() const
 {
 	return &this->mAimState;

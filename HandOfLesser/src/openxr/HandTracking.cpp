@@ -324,6 +324,11 @@ OpenXRHand* HandTracking::getHand(HOL::HandSide side)
 	}
 }
 
+const OpenXRHand* HandTracking::getHand(HOL::HandSide side) const
+{
+	return side == HOL::LeftHand ? &this->mLeftHand : &this->mRightHand;
+}
+
 HOL::HandTransformPayload HandTracking::getTransformPayload(HOL::HandSide side)
 {
 	OpenXRHand* hand = getHand(side);
@@ -353,6 +358,11 @@ HOL::HandPose& HandTracking::getHandPose(HOL::HandSide side)
 	return hand.handPose;
 }
 
+const HOL::HandPose& HandTracking::getHandPose(HOL::HandSide side) const
+{
+	return side == HOL::LeftHand ? this->mLeftHand.handPose : this->mRightHand.handPose;
+}
+
 void HandTracking::updateSteamVRHandBaseline(const HOL::SteamVRHandBaselinePayload& payload)
 {
 	mSteamVRTrackingSource.updateBaseline(payload);
@@ -376,91 +386,4 @@ HOL::SteamVR::SteamVRTrackingSource& HandTracking::getSteamVRTrackingSource()
 void HandTracking::resetSteamVRTrackingSource()
 {
 	mSteamVRTrackingSource.reset();
-}
-
-void HOL::OpenXR::HandTracking::drawHands()
-{
-	auto vis = HOL::UserInterface::Current->getVisualizer();
-	if (!vis->isActive())
-	{
-		return;
-	}
-
-	auto colorGrey = IM_COL32(155, 155, 155, 255);
-	auto colorWhite = IM_COL32(255, 255, 255, 255);
-
-	for (int i = 0; i < HandSide::HandSide_MAX; i++)
-	{
-		XrHandJointLocationEXT* jointLocations
-			= this->getHand((HandSide)i)->getLastJointLocations();
-
-		for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++)
-		{
-			XrHandJointLocationEXT& joint = jointLocations[j];
-
-			// WIll replace this later anyway so nevermind wasteful conversion
-			vis->submitPoint(OpenXR::toEigenVector(joint.pose.position), colorGrey, 5);
-		}
-
-		// Also draw some white skeleton lines
-		{
-			for (int finger = 0; finger < FingerType_MAX; finger++)
-			{
-				XrHandJointEXT rootJoint = OpenXR::getRootJoint((FingerType)finger);
-				for (int j = 0; j < 4; j++)
-				{
-					XrHandJointLocationEXT& joint = jointLocations[rootJoint + j];
-					XrHandJointLocationEXT& nextJoint = jointLocations[rootJoint + j + 1];
-					vis->submitLine(OpenXR::toEigenVector(joint.pose.position),
-									OpenXR::toEigenVector(nextJoint.pose.position),
-									colorWhite,
-									2);
-				}
-			}
-		}
-
-		XrHandJointLocationEXT& palm = jointLocations[XR_HAND_JOINT_PALM_EXT];
-
-		// Visualize palm orientation axes if enabled
-		if (Config.visualizer.showHandTrackingPalmAxes)
-		{
-			if (palm.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
-			{
-				vis->submitOrientationAxes(OpenXR::toEigenVector(palm.pose.position),
-										   OpenXR::toEigenQuaternion(palm.pose.orientation),
-										   0.120f,
-										   6.0f);
-			}
-		}
-
-		// Display the raw OpenXR hand-joint orientations directly so runtime-specific issues can
-		// be inspected without any downstream skeletal/OSC processing in the way.
-		if (Config.visualizer.showHandTrackingJointAxes)
-		{
-			for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++)
-			{
-				XrHandJointLocationEXT& joint = jointLocations[j];
-				if (!(joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
-					|| !(joint.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
-				{
-					continue;
-				}
-
-				vis->submitOrientationAxes(OpenXR::toEigenVector(joint.pose.position),
-										   OpenXR::toEigenQuaternion(joint.pose.orientation),
-										   0.040f,
-										   2.0f);
-			}
-		}
-
-		// This doesn't super go here but it's a good place for it.
-		if (i == HandSide::LeftHand && HOL::Config.visualizer.followLeftHand)
-		{
-			vis->centerTo(OpenXR::toEigenVector(palm.pose.position));
-		}
-		else if (i == HandSide::RightHand && HOL::Config.visualizer.followRightHand)
-		{
-			vis->centerTo(OpenXR::toEigenVector(palm.pose.position));
-		}
-	}
 }

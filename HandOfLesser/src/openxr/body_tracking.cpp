@@ -29,122 +29,21 @@ void HOL::OpenXR::BodyTracking::updateBody(XrSpace space,
 		space, time, hmdPose, lastHandPoses, externalSample);
 }
 
-void HOL::OpenXR::BodyTracking::drawBody()
-{
-	auto colorTracked = IM_COL32(0, 255, 0, 150);	 // Green semi-transparent for tracked
-	auto colorUntracked = IM_COL32(255, 180, 0, 170); // Orange for valid but untracked
-	auto colorInvalid = IM_COL32(255, 0, 0, 150);	 // Red for invalid joints
-	auto colorFallbackPalm = IM_COL32(255, 255, 0, 255);
-
-	auto vis = HOL::UserInterface::Current->getVisualizer();
-	if (!vis->isActive())
-	{
-		return;
-	}
-
-	XrBodyJointLocationFB* jointLocations = this->mBodyTracker.getLastJointLocations();
-	if (jointLocations == nullptr)
-	{
-		return;
-	}
-
-	for (int j = 0; j < XR_BODY_JOINT_COUNT_FB; j++)
-	{
-		XrBodyJointLocationFB& joint = jointLocations[j];
-
-		bool isValid = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
-					   == XR_SPACE_LOCATION_POSITION_VALID_BIT;
-		if (!isValid && (!this->mBodyTracker.isAvailable() || !this->mBodyTracker.active))
-		{
-			continue;
-		}
-
-		// Check if joint is tracked
-		bool isTracked = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT)
-						 == XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
-
-		auto color = isValid ? (isTracked ? colorTracked : colorUntracked) : colorInvalid;
-
-		vis->submitPoint(OpenXR::toEigenVector(joint.pose.position), color, 7);
-	}
-
-	if (Config.visualizer.showBodyTrackingJointAxes)
-	{
-		for (int j = 0; j < XR_BODY_JOINT_COUNT_FB; j++)
-		{
-			auto& joint = jointLocations[j];
-			bool positionValid = (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
-								 == XR_SPACE_LOCATION_POSITION_VALID_BIT;
-			bool orientationValid = (joint.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
-									== XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
-
-			if (!positionValid || !orientationValid)
-			{
-				continue;
-			}
-
-			vis->submitOrientationAxes(OpenXR::toEigenVector(joint.pose.position),
-									   OpenXR::toEigenQuaternion(joint.pose.orientation),
-									   0.040f,
-									   2.0f);
-		}
-	}
-
-	const auto drawFallbackPalm = [&](XrBodyJointFB jointIndex)
-	{
-		auto& palm = jointLocations[jointIndex];
-		bool isValid = (palm.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
-					   == XR_SPACE_LOCATION_POSITION_VALID_BIT;
-		bool isTracked = (palm.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT)
-						 == XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
-		if (isValid && !isTracked)
-		{
-			vis->submitPoint(OpenXR::toEigenVector(palm.pose.position), colorFallbackPalm, 7);
-		}
-	};
-
-	drawFallbackPalm(XR_BODY_JOINT_LEFT_HAND_PALM_FB);
-	drawFallbackPalm(XR_BODY_JOINT_RIGHT_HAND_PALM_FB);
-
-	// Visualize palm orientation axes if enabled
-	if (Config.visualizer.showBodyTrackingPalmAxes)
-	{
-		// Left palm
-		auto& leftPalm = jointLocations[XR_BODY_JOINT_LEFT_HAND_PALM_FB];
-		if (leftPalm.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
-		{
-			vis->submitOrientationAxes(OpenXR::toEigenVector(leftPalm.pose.position),
-									   OpenXR::toEigenQuaternion(leftPalm.pose.orientation),
-									   0.120f,
-									   6.0f);
-		}
-
-		// Right palm
-		auto& rightPalm = jointLocations[XR_BODY_JOINT_RIGHT_HAND_PALM_FB];
-		if (rightPalm.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
-		{
-			vis->submitOrientationAxes(OpenXR::toEigenVector(rightPalm.pose.position),
-									   OpenXR::toEigenQuaternion(rightPalm.pose.orientation),
-									   0.120f,
-									   6.0f);
-		}
-	}
-
-	if (Config.visualizer.showBodyTrackerAxes && this->mBodyTracker.isAvailable())
-	{
-		for (const auto& location : this->mLastBodyTrackerLocations)
-		{
-			vis->submitOrientationAxes(location.position,
-									   location.orientation,
-									   0.060f,
-									   3.0f);
-		}
-	}
-}
-
 OpenXRBody& HOL::OpenXR::BodyTracking::getBodyTracker()
 {
 	return mBodyTracker;
+}
+
+const OpenXRBody& HOL::OpenXR::BodyTracking::getBodyTracker() const
+{
+	return mBodyTracker;
+}
+
+const std::array<HOL::PoseLocation,
+				 static_cast<int>(HOL::BodyTrackerRole::TrackerRole_MAX)>&
+HOL::OpenXR::BodyTracking::getLastBodyTrackerLocations() const
+{
+	return mLastBodyTrackerLocations;
 }
 
 HOL::MultimodalPosePayload HOL::OpenXR::BodyTracking::getMultimodalPosePayload()

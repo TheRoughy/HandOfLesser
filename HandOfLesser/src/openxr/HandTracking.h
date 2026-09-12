@@ -34,13 +34,14 @@ namespace HOL::OpenXR
 		void updateInputs();
 		HOL::HandTransformPayload getTransformPayload(HOL::HandSide side);
 		HOL::HandPose& getHandPose(HOL::HandSide side);
+		const HOL::HandPose& getHandPose(HOL::HandSide side) const;
 		void updateSteamVRHandBaseline(const HOL::SteamVRHandBaselinePayload& payload);
 		void updateSteamVRHandPose(const HOL::SteamVRHandPosePayload& payload);
 		void updateSteamVRHmdPose(const HOL::SteamVRHmdPosePayload& payload);
 		HOL::SteamVR::SteamVRTrackingSource& getSteamVRTrackingSource();
 		void resetSteamVRTrackingSource();
-		void drawHands();
 		OpenXRHand* getHand(HOL::HandSide side);
+		const OpenXRHand* getHand(HOL::HandSide side) const;
 
 		void rebuildActions();
 		std::shared_ptr<BaseAction> getActionForBindingIndex(size_t bindingIndex) const;

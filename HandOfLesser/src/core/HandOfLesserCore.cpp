@@ -255,11 +255,6 @@ void HOL::HandOfLesserCore::userInterfaceLoop()
 
 	while (1)
 	{
-		if (state::Runtime.trackingProviderState == state::TrackingProviderState::Active)
-		{
-			this->mHandTracking.drawHands();
-			this->mBodyTracking.drawBody();
-		}
 		this->mUserInterface.onFrame();
 
 		if (this->mUserInterface.shouldCloseWindow())
@@ -671,6 +666,8 @@ bool HandOfLesserCore::updateTracking(bool skeletalUpdate)
 	}
 
 	this->sendUpdate(skeletalUpdate);
+	this->mUserInterface.getVisualizer()->publishTrackingFrame(
+		this->mHandTracking, this->mBodyTracking);
 
 	return true;
 }

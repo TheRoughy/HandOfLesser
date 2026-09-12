@@ -28,6 +28,7 @@ public:
 
 	HandPose handPose{};
 	XrHandJointLocationEXT* getLastJointLocations();
+	const XrHandJointLocationEXT* getLastJointLocations() const;
 	const XrHandTrackingAimStateFB* getAimState() const;
 
 private:

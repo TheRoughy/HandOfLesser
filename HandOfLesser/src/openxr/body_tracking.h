@@ -20,8 +20,11 @@ namespace HOL::OpenXR
 						const HOL::PoseLocation* hmdPose,
 						const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
 						const HOL::BodyTrackingSample* externalSample = nullptr);
-		void drawBody();
 		OpenXRBody& getBodyTracker();
+		const OpenXRBody& getBodyTracker() const;
+		const std::array<HOL::PoseLocation,
+							 static_cast<int>(HOL::BodyTrackerRole::TrackerRole_MAX)>&
+		getLastBodyTrackerLocations() const;
 		HOL::MultimodalPosePayload getMultimodalPosePayload();
 		std::vector<HOL::BodyTrackerPosePayload> getBodyTrackerPayloads();
 
