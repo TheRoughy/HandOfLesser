@@ -4,8 +4,8 @@ namespace HOL
 {
 	PoseLocationEuler getControllerBaseOffset()
 	{
-		return {Eigen::Vector3f(0.077f, -0.042f, -0.106f),
-				Eigen::Vector3f(-0.300f, -40.510f, -89.296f)};
+		return {Eigen::Vector3f(0.075f, -0.037f, -0.088f),
+				Eigen::Vector3f(1.700f, -40.510f, -89.296f)};
 	}
 
 	PoseLocation getControllerPoseOffset(HandSide side,
@@ -39,8 +39,8 @@ namespace HOL
 		switch (type)
 		{
 			case ControllerOffsetPreset::RoughyVRChatHand: {
-				return {Eigen::Vector3f(0.015, -0.008f, -0.005f),
-						Eigen::Vector3f(-3.0f, 4.000f, -6.000f)};
+				return {Eigen::Vector3f(0.021, -0.021f, -0.007f),
+						Eigen::Vector3f(-5.0f, -3.000f, 0.000f)};
 			}
 
 			case ControllerOffsetPreset::ZERO: {

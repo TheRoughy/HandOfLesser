@@ -319,8 +319,8 @@ namespace HOL
 			vr::EVRSkeletalTrackingLevel trackingLevel = vr::VRSkeletalTracking_Full;
 			float jointLengthMultiplier = 1.05f;
 			bool augmentControllerSkeleton = false;
-			Eigen::Vector3f positionOffset = Eigen::Vector3f(-0.168f, -0.041f, 0.049f);
-			Eigen::Vector3f orientationOffset = Eigen::Vector3f(174.300f, 1.221f, 136.930f);
+			Eigen::Vector3f positionOffset = Eigen::Vector3f(-0.175f, -0.050f, 0.045f);
+			Eigen::Vector3f orientationOffset = Eigen::Vector3f(179.300f, 2.221f, 138.930f);
 		};
 
 		struct SteamVRPoseSmoothingSettings
