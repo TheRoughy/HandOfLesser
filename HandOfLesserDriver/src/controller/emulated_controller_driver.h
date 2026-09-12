@@ -9,6 +9,7 @@
 #include <atomic>
 #include <thread>
 #include "src/hand_simulation.h"
+#include "src/steamvr/hand_tip_pose.h"
 #include "generic_control_interface.h"
 
 namespace HOL
@@ -161,7 +162,10 @@ namespace HOL
 		void UpdateBoolInput(const std::string& input, bool value) override;
 		void UpdateFloatInput(const std::string& input, float value) override;
 		void UpdateSkeletal(HOL::SkeletalPayload* payload) override;
-		void UpdateTipPose(const vr::HmdMatrix34_t& transform);
+		void UpdateTipPose(HOL::HandSide side,
+						   const HOL::PoseLocation& palmPose,
+						   const vr::DriverPose_t& hmdPose,
+						   float stabilizationSmoothingMS);
 		void SubmitPose() override;
 		bool isConnected() const;
 
@@ -194,6 +198,7 @@ namespace HOL
 
 		std::array<vr::VRInputComponentHandle_t, InputHandleType::MAX> mInputHandles{};
 		vr::VRInputComponentHandle_t mTipPoseHandle = vr::k_ulInvalidInputComponentHandle;
+		SteamVR::HandTipPoseGenerator mTipPoseGenerator;
 
 		std::atomic<bool> is_active_ = false;
 		std::atomic<bool> mDeviceConnected = false;

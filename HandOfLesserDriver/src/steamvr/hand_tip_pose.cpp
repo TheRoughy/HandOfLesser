@@ -1,5 +1,8 @@
 #include "hand_tip_pose.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace HOL::SteamVR
 {
 	Eigen::Quaternionf HandTipPoseGenerator::makeTipOrientation(const Eigen::Vector3f& direction,
@@ -32,11 +35,36 @@ namespace HOL::SteamVR
 		return Eigen::Quaternionf(rotation).normalized();
 	}
 
+	Eigen::Quaternionf
+	HandTipPoseGenerator::stabilizeOrientation(const Eigen::Quaternionf& orientation,
+											   float smoothingMS)
+	{
+		const auto now = std::chrono::steady_clock::now();
+		if (!mHasOrientation || smoothingMS <= 0.0f || mLastUpdateTime >= now)
+		{
+			mStabilizedOrientation = orientation;
+			mHasOrientation = true;
+		}
+		else
+		{
+			const float elapsedSeconds
+				= std::chrono::duration<float>(now - mLastUpdateTime).count();
+			const float smoothingSeconds = smoothingMS / 1000.0f;
+			const float alpha = 1.0f - std::exp(-elapsedSeconds / smoothingSeconds);
+			mStabilizedOrientation
+				= mStabilizedOrientation.slerp(std::clamp(alpha, 0.0f, 1.0f), orientation)
+					  .normalized();
+		}
+		mLastUpdateTime = now;
+		return mStabilizedOrientation;
+	}
+
 	std::optional<vr::HmdMatrix34_t>
 	HandTipPoseGenerator::generate(HOL::HandSide side,
 								   const HOL::PoseLocation& palmPose,
 								   const vr::DriverPose_t& controllerPose,
-								   const vr::DriverPose_t& hmdPose)
+								   const vr::DriverPose_t& hmdPose,
+								   float stabilizationSmoothingMS)
 	{
 		if (side < HOL::HandSide::LeftHand || side >= HOL::HandSide::HandSide_MAX)
 		{
@@ -104,6 +132,10 @@ namespace HOL::SteamVR
 			= hmdWorld.orientation * hmdLocalRotationOffset * worldToHmd;
 		worldPose.orientation
 			= worldRotationOffset * makeTipOrientation(forwardDirection, pointerUp);
+		// Palm filtering already stabilizes tip position. Filter the final world orientation here
+		// as it also depends on the independently moving HMD pose.
+		worldPose.orientation
+			= stabilizeOrientation(worldPose.orientation, stabilizationSmoothingMS);
 		// SteamVR expects /pose/tip relative to the controller rather than in world space.
 		const HOL::PoseLocation localPose = getRelativePose(controllerWorld, worldPose);
 		return poseLocationToMatrix34(localPose);

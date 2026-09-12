@@ -144,6 +144,8 @@ namespace HOL
 		HOL::HandSide side = HandSide::HandSide_MAX;
 		HOL::PoseLocation location;
 		HOL::PoseVelocity velocity;
+		// The driver uses this to stabilize HMD-dependent tip orientation with the palm pose.
+		float triggerStabilizationSmoothingMS = 0.0f;
 		// SteamVR forwarding keeps the native pose structure as an output template.
 		bool hasSteamVRSourcePose = false;
 		vr::DriverPose_t steamVRSourcePose{};

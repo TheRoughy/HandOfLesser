@@ -428,7 +428,10 @@ namespace HOL
 													 eBone_Count);
 	}
 
-	void EmulatedControllerDriver::UpdateTipPose(const vr::HmdMatrix34_t& transform)
+	void EmulatedControllerDriver::UpdateTipPose(HOL::HandSide side,
+												 const HOL::PoseLocation& palmPose,
+												 const vr::DriverPose_t& hmdPose,
+												 float stabilizationSmoothingMS)
 	{
 		if (!usesSteamLinkHandModel(my_emulated_profile_) || !is_active_ || !mDeviceConnected
 			|| mTipPoseHandle == vr::k_ulInvalidInputComponentHandle)
@@ -436,7 +439,12 @@ namespace HOL
 			return;
 		}
 
-		vr::VRDriverInput()->UpdatePoseComponent(mTipPoseHandle, &transform, 0.0);
+		const auto transform = mTipPoseGenerator.generate(
+			side, palmPose, GetPose(), hmdPose, stabilizationSmoothingMS);
+		if (transform)
+		{
+			vr::VRDriverInput()->UpdatePoseComponent(mTipPoseHandle, &*transform, 0.0);
+		}
 	}
 
 	void EmulatedControllerDriver::SubmitPose()

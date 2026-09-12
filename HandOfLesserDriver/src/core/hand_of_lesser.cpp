@@ -1765,12 +1765,8 @@ namespace HOL
 			return;
 		}
 
-		const auto tipPose = SteamVR::HandTipPoseGenerator::generate(
-			side, palmPose, controller->GetPose(), *hmdPose);
-		if (tipPose)
-		{
-			controller->UpdateTipPose(*tipPose);
-		}
+		controller->UpdateTipPose(
+			side, palmPose, *hmdPose, mLastHandTransforms[side].triggerStabilizationSmoothingMS);
 	}
 
 	// Hooks only publish snapshots and wake this thread. Conversion and pipe I/O must not run on

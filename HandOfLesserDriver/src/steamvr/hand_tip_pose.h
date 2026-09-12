@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <optional>
 #include <HandOfLesserCommon.h>
 
@@ -8,10 +9,11 @@ namespace HOL::SteamVR
 	class HandTipPoseGenerator
 	{
 	public:
-		static std::optional<vr::HmdMatrix34_t> generate(HOL::HandSide side,
-														 const HOL::PoseLocation& palmPose,
-														 const vr::DriverPose_t& controllerPose,
-														 const vr::DriverPose_t& hmdPose);
+		std::optional<vr::HmdMatrix34_t> generate(HOL::HandSide side,
+												  const HOL::PoseLocation& palmPose,
+												  const vr::DriverPose_t& controllerPose,
+												  const vr::DriverPose_t& hmdPose,
+												  float stabilizationSmoothingMS);
 
 	private:
 		static constexpr float HeadToPalmVerticalScale = 0.58f;
@@ -34,5 +36,11 @@ namespace HOL::SteamVR
 
 		static Eigen::Quaternionf makeTipOrientation(const Eigen::Vector3f& direction,
 													 const Eigen::Vector3f& preferredUp);
+		Eigen::Quaternionf stabilizeOrientation(const Eigen::Quaternionf& orientation,
+												float smoothingMS);
+
+		Eigen::Quaternionf mStabilizedOrientation = Eigen::Quaternionf::Identity();
+		std::chrono::steady_clock::time_point mLastUpdateTime{};
+		bool mHasOrientation = false;
 	};
 } // namespace HOL::SteamVR

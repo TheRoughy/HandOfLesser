@@ -97,16 +97,20 @@ void HandTracking::updateHands(
 	const std::array<const HOL::HandTrackingSample*, HOL::HandSide_MAX>& externalSamples)
 {
 	auto now = std::chrono::steady_clock::now();
+	this->mTriggerStabilizationSmoothingMS[HOL::LeftHand]
+		= getTriggerStabilizationSmoothingMS(HOL::LeftHand, now);
+	this->mTriggerStabilizationSmoothingMS[HOL::RightHand]
+		= getTriggerStabilizationSmoothingMS(HOL::RightHand, now);
 	this->mLeftHand.updateJointLocations(space,
 										 time,
 										 bodyTracker,
-										 getTriggerStabilizationSmoothingMS(HOL::LeftHand, now),
+										 mTriggerStabilizationSmoothingMS[HOL::LeftHand],
 										 skeletalUpdate,
 										 externalSamples[HOL::LeftHand]);
 	this->mRightHand.updateJointLocations(space,
 										  time,
 										  bodyTracker,
-										  getTriggerStabilizationSmoothingMS(HOL::RightHand, now),
+										  mTriggerStabilizationSmoothingMS[HOL::RightHand],
 										  skeletalUpdate,
 										  externalSamples[HOL::RightHand]);
 
@@ -155,9 +159,12 @@ void HandTracking::updateHands(
 
 void HOL::OpenXR::HandTracking::updateTriggerStabilizationState(const ActionSet& actionSet)
 {
+	const auto wasHeld = this->mTriggerStabilizationHeld;
 	this->mTriggerStabilizationHeld.fill(false);
 	if (!Config.steamvr.triggerStabilization)
 	{
+		this->mLastTriggerStabilizationTime.fill({});
+		this->mLastTriggerReleaseTime.fill({});
 		return;
 	}
 
@@ -200,6 +207,17 @@ void HOL::OpenXR::HandTracking::updateTriggerStabilizationState(const ActionSet&
 			}
 		}
 	}
+
+	const auto now = std::chrono::steady_clock::now();
+	for (int side = 0; side < HOL::HandSide_MAX; side++)
+	{
+		if (wasHeld[side] && !this->mTriggerStabilizationHeld[side])
+		{
+			// Release stabilization starts at full strength independently of how long the trigger
+			// was held or how far its trigger-down falloff had progressed.
+			this->mLastTriggerReleaseTime[side] = now;
+		}
+	}
 }
 
 float HOL::OpenXR::HandTracking::getTriggerStabilizationSmoothingMS(
@@ -211,18 +229,18 @@ float HOL::OpenXR::HandTracking::getTriggerStabilizationSmoothingMS(
 		return 0.0f;
 	}
 
-	if (!this->mTriggerStabilizationHeld[side])
-	{
-		return 0.0f;
-	}
-
-	float falloffMS = Config.steamvr.triggerStabilizationFalloffMS;
+	const bool held = this->mTriggerStabilizationHeld[side];
+	const float smoothingMS = held ? Config.steamvr.triggerStabilizationSmoothingMS
+								   : Config.steamvr.triggerReleaseStabilizationSmoothingMS;
+	const float falloffMS = held ? Config.steamvr.triggerStabilizationFalloffMS
+								 : Config.steamvr.triggerReleaseStabilizationFalloffMS;
 	if (falloffMS <= 0.0f)
 	{
 		return 0.0f;
 	}
 
-	const auto& triggerTime = this->mLastTriggerStabilizationTime[side];
+	const auto& triggerTime
+		= held ? this->mLastTriggerStabilizationTime[side] : this->mLastTriggerReleaseTime[side];
 	if (triggerTime == std::chrono::steady_clock::time_point{})
 	{
 		return 0.0f;
@@ -235,7 +253,7 @@ float HOL::OpenXR::HandTracking::getTriggerStabilizationSmoothingMS(
 	}
 
 	float remainingAlpha = 1.0f - (elapsedMS / falloffMS);
-	return Config.steamvr.triggerStabilizationSmoothingMS * std::clamp(remainingAlpha, 0.0f, 1.0f);
+	return smoothingMS * std::clamp(remainingAlpha, 0.0f, 1.0f);
 }
 
 void HandTracking::updateInputs()
@@ -319,6 +337,7 @@ HOL::HandTransformPayload HandTracking::getTransformPayload(HOL::HandSide side)
 	payload.side = (HOL::HandSide)side;
 	payload.location = hand->handPose.palmLocation;
 	payload.velocity = hand->handPose.palmVelocity;
+	payload.triggerStabilizationSmoothingMS = this->mTriggerStabilizationSmoothingMS[side];
 
 	if (HOL::state::Runtime.trackingProvider == HOL::state::TrackingProvider::SteamVRDriver)
 	{

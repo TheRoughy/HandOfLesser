@@ -341,6 +341,10 @@ namespace HOL
 				 {"triggerStabilization", settings.triggerStabilization},
 				 {"triggerStabilizationSmoothingMS", settings.triggerStabilizationSmoothingMS},
 				 {"triggerStabilizationFalloffMS", settings.triggerStabilizationFalloffMS},
+				 {"triggerReleaseStabilizationSmoothingMS",
+				  settings.triggerReleaseStabilizationSmoothingMS},
+				 {"triggerReleaseStabilizationFalloffMS",
+				  settings.triggerReleaseStabilizationFalloffMS},
 				 {"handTrackingResumeBlendMS", settings.handTrackingResumeBlendMS},
 				 {"jitterLastPoseOnTrackingLoss", settings.jitterLastPoseOnTrackingLoss}};
 		}
@@ -373,6 +377,12 @@ namespace HOL
 				j, "triggerStabilizationSmoothingMS", settings.triggerStabilizationSmoothingMS);
 			nlohmann::get_to_if_present(
 				j, "triggerStabilizationFalloffMS", settings.triggerStabilizationFalloffMS);
+			nlohmann::get_to_if_present(j,
+										"triggerReleaseStabilizationSmoothingMS",
+										settings.triggerReleaseStabilizationSmoothingMS);
+			nlohmann::get_to_if_present(j,
+										"triggerReleaseStabilizationFalloffMS",
+										settings.triggerReleaseStabilizationFalloffMS);
 			nlohmann::get_to_if_present(
 				j, "handTrackingResumeBlendMS", settings.handTrackingResumeBlendMS);
 			nlohmann::get_to_if_present(

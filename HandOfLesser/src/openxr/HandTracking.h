@@ -80,7 +80,10 @@ namespace HOL::OpenXR
 		std::atomic<std::shared_ptr<const ActionSet>> mSteamLinkNativeActionSet
 			= std::make_shared<ActionSet>();
 		std::array<bool, HOL::HandSide_MAX> mTriggerStabilizationHeld = {false, false};
+		std::array<float, HOL::HandSide_MAX> mTriggerStabilizationSmoothingMS = {0.0f, 0.0f};
 		std::array<std::chrono::steady_clock::time_point, HOL::HandSide_MAX>
 			mLastTriggerStabilizationTime = {};
+		std::array<std::chrono::steady_clock::time_point, HOL::HandSide_MAX> mLastTriggerReleaseTime
+			= {};
 	};
 } // namespace HOL::OpenXR
