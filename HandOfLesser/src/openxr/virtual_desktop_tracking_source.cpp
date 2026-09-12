@@ -178,25 +178,12 @@ namespace HOL::VirtualDesktop
 		}
 
 		// VDXR adds the Oculus-configured eye height before exposing this data through OpenXR.
-		// Direct shared-memory access has no eye-height field, so infer the equivalent translation
-		// from the feet when full-body data is available.
-		float footHeight = 0.0f;
-		int validFeet = 0;
-		for (const XrFullBodyJointMETA foot :
-			 {XR_FULL_BODY_JOINT_LEFT_FOOT_BALL_META, XR_FULL_BODY_JOINT_RIGHT_FOOT_BALL_META})
+		// The shared full-body root lies on the floor plane, so its negative Y value gives us the
+		// equivalent translation without treating the center of an anatomical joint as the floor.
+		const auto& root = snapshot.bodyJoints[XR_FULL_BODY_JOINT_ROOT_META];
+		if (hasValidPosition(root.locationFlags))
 		{
-			const auto& joint = snapshot.bodyJoints[foot];
-			if (hasValidPosition(joint.locationFlags))
-			{
-				footHeight += joint.pose.position.y;
-				validFeet++;
-			}
-		}
-
-		if (validFeet > 0)
-		{
-			// The full-body feet reveal whether VD supplied floor-relative or eye-relative poses.
-			mFloorOffset = -(footHeight / static_cast<float>(validFeet));
+			mFloorOffset = -root.pose.position.y;
 			if (mFloorOffset < -0.25f || mFloorOffset > 2.5f)
 			{
 				mFloorOffset = 0.0f;
@@ -204,7 +191,7 @@ namespace HOL::VirtualDesktop
 		}
 		else
 		{
-			// A head near Y=0 confirms eye-relative data when feet are unavailable.
+			// A head near Y=0 confirms eye-relative data when the root is unavailable.
 			const auto& head = snapshot.bodyJoints[XR_FULL_BODY_JOINT_HEAD_META];
 			if (!hasValidPosition(head.locationFlags))
 			{
