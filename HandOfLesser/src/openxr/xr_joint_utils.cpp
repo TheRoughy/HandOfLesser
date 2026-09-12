@@ -14,6 +14,85 @@ namespace HOL::OpenXR
 		return joint;
 	}
 
+	bool reconstructPalmJoint(XrHandJointLocationEXT jointLocations[],
+							  XrHandJointVelocityEXT jointVelocities[])
+	{
+		auto& palm = jointLocations[XR_HAND_JOINT_PALM_EXT];
+		const auto& metacarpal = jointLocations[XR_HAND_JOINT_MIDDLE_METACARPAL_EXT];
+		const auto& proximal = jointLocations[XR_HAND_JOINT_MIDDLE_PROXIMAL_EXT];
+		const XrSpaceLocationFlags requiredFlags
+			= XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+		if ((metacarpal.locationFlags & requiredFlags) != requiredFlags
+			|| !(proximal.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT))
+		{
+			palm = {};
+			jointVelocities[XR_HAND_JOINT_PALM_EXT] = {};
+			return false;
+		}
+
+		// The palm center lies halfway along the middle metacarpal segment. Its orientation
+		// follows the metacarpal, whose local axes use the same hand-joint convention.
+		palm.pose.position = toXrVector(
+			(toEigenVector(metacarpal.pose.position) + toEigenVector(proximal.pose.position))
+			* 0.5f);
+		palm.pose.orientation = metacarpal.pose.orientation;
+		palm.locationFlags = metacarpal.locationFlags;
+
+		auto& palmVelocity = jointVelocities[XR_HAND_JOINT_PALM_EXT];
+		const auto& metacarpalVelocity
+			= jointVelocities[XR_HAND_JOINT_MIDDLE_METACARPAL_EXT];
+		const auto& proximalVelocity
+			= jointVelocities[XR_HAND_JOINT_MIDDLE_PROXIMAL_EXT];
+		palmVelocity = {};
+		if ((metacarpalVelocity.velocityFlags & XR_SPACE_VELOCITY_LINEAR_VALID_BIT)
+			&& (proximalVelocity.velocityFlags & XR_SPACE_VELOCITY_LINEAR_VALID_BIT))
+		{
+			palmVelocity.linearVelocity = toXrVector(
+				(toEigenVector(metacarpalVelocity.linearVelocity)
+				 + toEigenVector(proximalVelocity.linearVelocity))
+				* 0.5f);
+			palmVelocity.velocityFlags |= XR_SPACE_VELOCITY_LINEAR_VALID_BIT;
+		}
+		if (metacarpalVelocity.velocityFlags & XR_SPACE_VELOCITY_ANGULAR_VALID_BIT)
+		{
+			palmVelocity.angularVelocity = metacarpalVelocity.angularVelocity;
+			palmVelocity.velocityFlags |= XR_SPACE_VELOCITY_ANGULAR_VALID_BIT;
+		}
+		return true;
+	}
+
+	bool reconstructPalmJoint(XrBodyJointLocationFB jointLocations[], HOL::HandSide side)
+	{
+		const XrBodyJointFB metacarpalJoint
+			= side == HOL::LeftHand ? XR_BODY_JOINT_LEFT_HAND_MIDDLE_METACARPAL_FB
+									: XR_BODY_JOINT_RIGHT_HAND_MIDDLE_METACARPAL_FB;
+		const XrBodyJointFB proximalJoint
+			= side == HOL::LeftHand ? XR_BODY_JOINT_LEFT_HAND_MIDDLE_PROXIMAL_FB
+									: XR_BODY_JOINT_RIGHT_HAND_MIDDLE_PROXIMAL_FB;
+		const XrBodyJointFB palmJoint = side == HOL::LeftHand
+			? XR_BODY_JOINT_LEFT_HAND_PALM_FB
+			: XR_BODY_JOINT_RIGHT_HAND_PALM_FB;
+
+		auto& palm = jointLocations[palmJoint];
+		const auto& metacarpal = jointLocations[metacarpalJoint];
+		const auto& proximal = jointLocations[proximalJoint];
+		const XrSpaceLocationFlags requiredFlags
+			= XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+		if ((metacarpal.locationFlags & requiredFlags) != requiredFlags
+			|| !(proximal.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT))
+		{
+			palm = {};
+			return false;
+		}
+
+		palm.pose.position = toXrVector(
+			(toEigenVector(metacarpal.pose.position) + toEigenVector(proximal.pose.position))
+			* 0.5f);
+		palm.pose.orientation = metacarpal.pose.orientation;
+		palm.locationFlags = metacarpal.locationFlags;
+		return true;
+	}
+
 	XrHandJointLocationEXT& getJoint(XrHandJointLocationEXT leftHandJoints[],
 									 XrHandJointLocationEXT rightHandJoints[],
 									 XrHandJointEXT joint,

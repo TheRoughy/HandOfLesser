@@ -10,6 +10,9 @@
 namespace HOL::OpenXR
 {
 	XrBodyJointLocationFB toXrBodyJointLocation(const HOL::PoseLocation& pose);
+	bool reconstructPalmJoint(XrHandJointLocationEXT jointLocations[],
+							  XrHandJointVelocityEXT jointVelocities[]);
+	bool reconstructPalmJoint(XrBodyJointLocationFB jointLocations[], HOL::HandSide side);
 
 	XrHandJointLocationEXT& getJoint(XrHandJointLocationEXT leftHandJoints[],
 									 XrHandJointLocationEXT rightHandJoints[],

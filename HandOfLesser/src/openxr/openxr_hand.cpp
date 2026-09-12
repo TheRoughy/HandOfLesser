@@ -256,6 +256,10 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 		return;
 	}
 
+	// Runtime palm joints have proven inconsistent across providers. Derive the palm from the
+	// surrounding middle-finger joints so hand and body tracking use the same definition.
+	reconstructPalmJoint(this->mJointLocations, this->mJointVelocities);
+
 	this->handPose.active = handActive;
 	HOL::display::HandTransform[this->mSide].dataSource
 		= XR_HAND_TRACKING_DATA_SOURCE_MAX_ENUM_EXT;

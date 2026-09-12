@@ -51,7 +51,7 @@ private:
 
 	void preservePalmPose(HandSide side);
 	bool canUseArmTrackingAnchor() const;
-	void generateMissingPalmJoint(HandSide side);
+	void reconstructPalmJoint(HandSide side);
 	void updateTrackedPalmTransform(HandSide side, XrBodyJointFB anchorJoint, XrTime time);
 	void setFallbackJointLocations(
 		const HOL::PoseLocation* hmdPose,

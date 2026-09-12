@@ -158,10 +158,10 @@ void OpenXRBody::updateJointLocations(XrSpace space,
 		return;
 	}
 
-	// Generate our own palm joints from body tracking.
-	// The joint is missing in the oculus runtime, and calculated incorrectly in VDXR.
-	generateMissingPalmJoint(HandSide::LeftHand);
-	generateMissingPalmJoint(HandSide::RightHand);
+	// Runtime palm joints have proven inconsistent across providers, so always derive them from
+	// the surrounding middle-finger joints.
+	reconstructPalmJoint(HandSide::LeftHand);
+	reconstructPalmJoint(HandSide::RightHand);
 
 	// Preserve palm pose when hand tracking is lost.
 	// Use metacarpal tracking state to detect loss - fingers remain tracked until fully lost
@@ -485,47 +485,29 @@ void OpenXRBody::applyRelativeTransform(const XrBodyJointLocationFB& baseJoint,
 	childJoint.pose.orientation.z = childRot.z();
 }
 
-void OpenXRBody::generateMissingPalmJoint(HandSide side)
+void OpenXRBody::reconstructPalmJoint(HandSide side)
 {
-	// Body tracking on Oculus does not provide palm joint, so we generate it
-	// according to OpenXR spec: center of middle finger's metacarpal bone
-
-	// Get the joint indices for this hand
 	XrBodyJointFB metacarpalJoint = (side == HandSide::LeftHand)
-										? XR_BODY_JOINT_LEFT_HAND_MIDDLE_METACARPAL_FB
-										: XR_BODY_JOINT_RIGHT_HAND_MIDDLE_METACARPAL_FB;
+									 ? XR_BODY_JOINT_LEFT_HAND_MIDDLE_METACARPAL_FB
+									 : XR_BODY_JOINT_RIGHT_HAND_MIDDLE_METACARPAL_FB;
 
 	XrBodyJointFB proximalJoint = (side == HandSide::LeftHand)
 									  ? XR_BODY_JOINT_LEFT_HAND_MIDDLE_PROXIMAL_FB
 									  : XR_BODY_JOINT_RIGHT_HAND_MIDDLE_PROXIMAL_FB;
 
-	XrBodyJointFB palmJoint = (side == HandSide::LeftHand) ? XR_BODY_JOINT_LEFT_HAND_PALM_FB
-														   : XR_BODY_JOINT_RIGHT_HAND_PALM_FB;
-
-	// Check if joints are valid
-	auto& metacarpal = mJointLocations[metacarpalJoint];
-	auto& proximal = mJointLocations[proximalJoint];
-
-	if (!(metacarpal.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
-		|| !(proximal.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT))
+	if (!OpenXR::reconstructPalmJoint(this->mJointLocations, side))
 	{
-		return; // Can't generate palm without valid metacarpal joints
+		return;
 	}
 
-	// Calculate position: midpoint of metacarpal bone
+	XrBodyJointFB palmJoint = (side == HandSide::LeftHand) ? XR_BODY_JOINT_LEFT_HAND_PALM_FB
+														   : XR_BODY_JOINT_RIGHT_HAND_PALM_FB;
+	auto& metacarpal = mJointLocations[metacarpalJoint];
+	auto& proximal = mJointLocations[proximalJoint];
+	auto& palm = mJointLocations[palmJoint];
 	Eigen::Vector3f metacarpalPos = OpenXR::toEigenVector(metacarpal.pose.position);
 	Eigen::Vector3f proximalPos = OpenXR::toEigenVector(proximal.pose.position);
 	Eigen::Vector3f palmPos = (metacarpalPos + proximalPos) * 0.5f;
-
-	// Calculate orientation according to OpenXR spec:
-	// +Z points away from fingertips (along metacarpal towards wrist)
-	// +Y points towards back of hand (perpendicular to palm surface)
-	// +X follows right-hand rule
-
-	Eigen::Vector3f zAxis
-		= (metacarpalPos - proximalPos).normalized(); // Points from finger to wrist
-
-	// Just reuse metacarpal for orientation
 	Eigen::Quaternionf palmOrientation = OpenXR::toEigenQuaternion(metacarpal.pose.orientation);
 
 	// OVR returns bad body tracking orientations
@@ -542,17 +524,5 @@ void OpenXRBody::generateMissingPalmJoint(HandSide side)
 		}
 	}
 
-	// Set palm joint location
-	auto& palm = mJointLocations[palmJoint];
-	palm.pose.position.x = palmPos.x();
-	palm.pose.position.y = palmPos.y();
-	palm.pose.position.z = palmPos.z();
-
-	palm.pose.orientation.w = palmOrientation.w();
-	palm.pose.orientation.x = palmOrientation.x();
-	palm.pose.orientation.y = palmOrientation.y();
-	palm.pose.orientation.z = palmOrientation.z();
-
-	// Inherit tracking state directly from metacarpal joint
-	palm.locationFlags = metacarpal.locationFlags;
+	palm.pose.orientation = OpenXR::toXrQuaternion(palmOrientation);
 }
