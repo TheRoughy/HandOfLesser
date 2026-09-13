@@ -128,7 +128,7 @@ namespace HOL
 			bool applyBaseOffset = true;
 			bool forceInactive = false;
 			HOL::EmulatedControllerProfile emulatedControllerProfile
-				= HOL::EmulatedControllerProfile::EmulatedControllerProfile_OculusTouch;
+				= HOL::EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch;
 			Eigen::Vector3f orientationOffset = Eigen::Vector3f(0, 0, 0);
 			Eigen::Vector3f positionOffset = Eigen::Vector3f(0, 0, 0);
 		};
