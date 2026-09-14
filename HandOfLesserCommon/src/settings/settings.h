@@ -361,9 +361,9 @@ namespace HOL
 				= defaultSteamVRPoseSmoothingSettings(true);
 			bool triggerStabilization = true;
 			float triggerStabilizationSmoothingMS = 2000.0f;
-			float triggerStabilizationFalloffMS = 250.0f;
+			float triggerStabilizationFalloffMS = 100.0f;
 			float triggerReleaseStabilizationSmoothingMS = 2000.0f;
-			float triggerReleaseStabilizationFalloffMS = 250.0f;
+			float triggerReleaseStabilizationFalloffMS = 100.0f;
 			float handTrackingResumeBlendMS = 500.0f;
 			bool jitterLastPoseOnTrackingLoss = true;
 		};
