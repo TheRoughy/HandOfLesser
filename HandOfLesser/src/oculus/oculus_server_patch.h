@@ -17,6 +17,8 @@ namespace HOL::hacks
 		OvrServerTrackingPatch(const OvrServerTrackingPatch&) = delete;
 		OvrServerTrackingPatch& operator=(const OvrServerTrackingPatch&) = delete;
 		// Find the server/check and install a scoped jump to our generated code.
+		// A recognized patch retained after forced app exit is restored first, provided
+		// its owner has exited; the new patch then targets this process's PID.
 		// Returns false and logs the error if installation cannot be completed.
 		bool install();
 

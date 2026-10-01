@@ -7,7 +7,6 @@
 #include <iostream>
 #include <string>
 #include <utility>
-#include <utility>
 
 // OVRServer stops publishing hand/body data to clients that are not focused.
 // We change its permission check to also allow this HandOfLesser process. All of
@@ -275,7 +274,33 @@ namespace HOL::hacks
 			uintptr_t address;
 			detail::Predicate predicate;
 			Bytes context;
+			// Nonzero only for a recognized patch left by an earlier app.
+			uintptr_t retainedTrampoline = 0;
+			Bytes retainedCode;
+			DWORD ownerPid = 0;
 		};
+
+		// Our trampoline occupies the start of its own zero-initialized private page.
+		// Validate the page before reading code from a discovered jump destination, and
+		// refuse to free a page containing anything beyond the known 26-byte trampoline.
+		std::optional<Bytes> readRetainedTrampoline(HANDLE process, uintptr_t address)
+		{
+			MEMORY_BASIC_INFORMATION info{};
+			if (!VirtualQueryEx(process, reinterpret_cast<void*>(address), &info, sizeof(info))
+				|| info.State != MEM_COMMIT || info.Type != MEM_PRIVATE
+				|| info.Protect != PAGE_EXECUTE_READ
+				|| reinterpret_cast<uintptr_t>(info.BaseAddress) != address
+				|| reinterpret_cast<uintptr_t>(info.AllocationBase) != address
+				|| info.RegionSize != TrampolinePageSize)
+				return std::nullopt;
+			auto page = readRemoteBytes(process, address, TrampolinePageSize);
+			if (!std::all_of(page.begin() + detail::TrampolineSize,
+							 page.end(),
+							 [](uint8_t byte) { return byte == 0; }))
+				return std::nullopt;
+			page.resize(detail::TrampolineSize);
+			return page;
+		}
 
 		PermissionCheck findTrackingPermissionCheck(HANDLE process, const MODULEENTRY32W& module)
 		{
@@ -283,6 +308,7 @@ namespace HOL::hacks
 			const auto sections = readValidatedSections(process, module);
 			const auto permissionFunction = findPermissionFunction(process, module);
 			std::vector<PermissionCheck> matches;
+			size_t unrecognizedRedirects = 0;
 
 			// First recognize the short PID-comparison sequence, then verify its purpose
 			// through the exported permission call. No service names or padding are matched.
@@ -298,19 +324,46 @@ namespace HOL::hacks
 					continue;
 
 				auto bytes = readRemoteBytes(process, base + section.VirtualAddress, size);
-				for (size_t offset : detail::findContexts(bytes))
+				for (size_t offset = 0; offset + detail::ContextSize <= bytes.size(); ++offset)
 				{
 					const auto context = std::span<const uint8_t>(bytes).subspan(
 						offset,
 						std::min(size - offset,
 								 detail::ContextSize + detail::PermissionCallSearchSize));
-					const auto predicate = *detail::decodeContext(context);
 					const auto address = base + section.VirtualAddress + offset;
-					if (detail::feedsPermissionCall(
-							context, address, predicate, permissionFunction))
-						matches.push_back({address + detail::PredicateOffset,
-										   predicate,
-										   Bytes(context.begin(), context.end())});
+					if (const auto predicate = detail::decodeContext(context))
+					{
+						if (detail::feedsPermissionCall(
+								context, address, *predicate, permissionFunction))
+							matches.push_back({address + detail::PredicateOffset,
+											   *predicate,
+											   Bytes(context.begin(), context.end())});
+						continue;
+					}
+
+					// Task Manager termination leaves a jump instead of CMP/SETE. Recover
+					// their bytes from a fully recognized trampoline, then apply the SAME
+					// register/call validation used for an unpatched site.
+					const auto redirect = detail::decodeRedirect(context, address);
+					if (!redirect)
+						continue;
+					const auto code = readRetainedTrampoline(process, *redirect);
+					const auto retained
+						= code ? detail::decodeRetainedPatch(context, address, *code, *redirect)
+							   : std::nullopt;
+					if (!retained
+						|| !detail::feedsPermissionCall(
+							context, address, retained->predicate, permissionFunction))
+					{
+						++unrecognizedRedirects;
+						continue;
+					}
+					matches.push_back({address + detail::PredicateOffset,
+									   retained->predicate,
+									   Bytes(context.begin(), context.end()),
+									   *redirect,
+									   *code,
+									   retained->ownerPid});
 				}
 			}
 
@@ -318,7 +371,8 @@ namespace HOL::hacks
 			if (matches.size() != 1)
 				throw std::runtime_error(
 					"Expected one verified OVRServer tracking predicate, found "
-					+ std::to_string(matches.size()) + "; no patch applied");
+					+ std::to_string(matches.size()) + "; unrecognized existing redirects "
+					+ std::to_string(unrecognizedRedirects) + "; no patch applied");
 			return matches.front();
 		}
 
@@ -529,6 +583,7 @@ namespace HOL::hacks
 		// Set BEFORE attempting the redirect write. Even a failed/partial write must
 		// be checked during cleanup before the trampoline can safely be freed.
 		bool mayHaveChangedPredicate = false;
+		bool recoveringRetainedPatch = false;
 
 		Impl()
 		{
@@ -573,6 +628,61 @@ namespace HOL::hacks
 
 		// Installation: locate -> prepare -> redirect. Execution only changes in step 3.
 
+		// The ownership mutex already excludes cooperating live app/runner owners.
+		// Also verify the PID embedded in the retained code: do not reclaim another
+		// running process's patch when its mutex is missing or was released early.
+		void verifyRetainedOwnerExited(DWORD ownerPid)
+		{
+			// Windows can reuse a dead owner's PID for this new app. We own the mutex
+			// and have not installed yet, so recovering that exact self-PID patch is safe.
+			if (ownerPid == GetCurrentProcessId())
+				return;
+			OwnedHandle owner{OpenProcess(SYNCHRONIZE, false, ownerPid)};
+			if (!owner.value)
+			{
+				if (GetLastError() == ERROR_INVALID_PARAMETER)
+					return; // The PID no longer identifies a process.
+				checkWindowsCall(false, "OpenProcess(retained OVRServer patch owner)");
+			}
+			const DWORD status = WaitForSingleObject(owner.value, 0);
+			if (status == WAIT_OBJECT_0)
+				return;
+			if (status == WAIT_FAILED)
+				checkWindowsCall(false, "WaitForSingleObject(retained patch owner)");
+			throw std::runtime_error("Existing OVRServer patch owner PID "
+									 + std::to_string(ownerPid)
+									 + " is still running; refusing to replace its patch");
+		}
+
+		void recoverRetainedPatch(const PermissionCheck& check)
+		{
+			verifyRetainedOwnerExited(check.ownerPid);
+			// Finish potentially throwing local copies before adopting remote memory.
+			// Otherwise a failed copy could make cleanup free a still-referenced page.
+			auto context = check.context;
+			auto code = check.retainedCode;
+			Bytes redirect(check.context.begin() + detail::PredicateOffset,
+						   check.context.begin() + detail::ContextSize);
+
+			// Adopt the validated old allocation into the usual cleanup path. If repair
+			// fails, these fields remain available for retry and the code is not freed
+			// while a surviving jump might still reach it.
+			predicateAddress = check.address;
+			predicate = check.predicate;
+			originalContext = std::move(context);
+			trampolineBytes = std::move(code);
+			redirectBytes = std::move(redirect);
+			recoveringRetainedPatch = true;
+			mayHaveChangedPredicate = true;
+			trampolineAddress = check.retainedTrampoline;
+			restoreOriginalPredicate();
+			freeTrampoline();
+			recoveringRetainedPatch = false;
+			std::cout << "Recovered retained OVRServer tracking patch for PID " << check.ownerPid
+					  << "; original instructions restored and stale trampoline freed."
+					  << std::endl;
+		}
+
 		void prepareTrampoline()
 		{
 			trampolineAddress = allocateTrampolineNear(serverProcess.value, predicateAddress);
@@ -610,6 +720,15 @@ namespace HOL::hacks
 			// 1. Find the loaded DLL and its unique focus/permission check.
 			auto module = findModule(serverPid);
 			auto check = findTrackingPermissionCheck(serverProcess.value, module);
+			if (check.retainedTrampoline)
+			{
+				recoverRetainedPatch(check);
+				// Re-scan the restored code so normal installation gets a fresh snapshot.
+				check = findTrackingPermissionCheck(serverProcess.value, module);
+				if (check.retainedTrampoline)
+					throw std::runtime_error(
+						"OVRServer tracking predicate was redirected again after recovery");
+			}
 			predicateAddress = check.address;
 			predicate = check.predicate;
 			originalContext = std::move(check.context);
@@ -641,6 +760,21 @@ namespace HOL::hacks
 				!= Bytes(expected.begin(), expected.end()))
 				throw std::runtime_error(
 					"OVRServer patch ownership check failed; refusing to overwrite bytes");
+
+			// Discovery ran before suspension. Recheck the whole retained code/context
+			// while server threads are paused before reclaiming the old jump/allocation.
+			if (recoveringRetainedPatch)
+			{
+				const auto retainedCode
+					= readRetainedTrampoline(serverProcess.value, trampolineAddress);
+				if (!retainedCode || *retainedCode != trampolineBytes
+					|| readRemoteBytes(serverProcess.value,
+									   predicateAddress - detail::PredicateOffset,
+									   originalContext.size())
+						   != originalContext)
+					throw std::runtime_error("Retained OVRServer patch changed before recovery; "
+											 "refusing to overwrite it");
+			}
 
 			const bool installing
 				= std::equal(expected.begin(), expected.end(), predicate.original.begin());
@@ -795,7 +929,7 @@ namespace HOL::hacks
 	bool OvrServerTrackingPatch::install()
 	{
 		if (mImpl)
-			return mImpl->mayHaveChangedPredicate;
+			return mImpl->mayHaveChangedPredicate && !mImpl->recoveringRetainedPatch;
 		try
 		{
 			mImpl = std::make_unique<Impl>();

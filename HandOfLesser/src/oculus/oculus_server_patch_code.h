@@ -22,6 +22,7 @@ namespace HOL::hacks::detail
 	inline constexpr size_t PredicateSize = 7;
 	inline constexpr size_t ContextSize = PredicateOffset + PredicateSize;
 	inline constexpr size_t PermissionCallSearchSize = 128;
+	inline constexpr size_t TrampolineSize = 26;
 
 	struct Predicate
 	{
@@ -30,18 +31,11 @@ namespace HOL::hacks::detail
 		uint8_t enableRegister;
 	};
 
-	// Recognize four instructions and follow their register relationships:
-	//   mov object,[iterator]
-	//   mov clientPid,[object+field]
-	//   cmp clientPid,focusedPid
-	//   sete enabled
-	// Decode only these forms, rather than introducing a general disassembler. The
-	// CMP/SETE must occupy seven bytes so they can be replaced by our five-byte jump.
-	// Different registers and field offsets are allowed; other encodings fail to match.
-	// The .cpp also verifies that "enabled" feeds ipc_EnableServerStateGroup.
-	inline std::optional<Predicate> decodeContext(std::span<const uint8_t> bytes)
+	// Decode the two loads preceding the permission check. These survive both normal
+	// patch installation and a forced app exit, so they also anchor stale-patch discovery.
+	inline std::optional<uint8_t> decodeClientRegister(std::span<const uint8_t> bytes)
 	{
-		if (bytes.size() < ContextSize)
+		if (bytes.size() < PredicateOffset)
 			return std::nullopt;
 
 		// REX.W + MOV r64,[r64]. Exclude SIB/RIP-relative addressing, which changes length.
@@ -58,6 +52,24 @@ namespace HOL::hacks::detail
 		const uint8_t clientRegister = ((bytes[5] >> 3) & 7) | ((bytes[3] & 4) << 1);
 		if (baseRegister != objectRegister || clientRegister == 4)
 			return std::nullopt;
+		return clientRegister;
+	}
+
+	// Recognize four instructions and follow their register relationships:
+	//   mov object,[iterator]
+	//   mov clientPid,[object+field]
+	//   cmp clientPid,focusedPid
+	//   sete enabled
+	// Decode only these forms, rather than introducing a general disassembler. The
+	// CMP/SETE must occupy seven bytes so they can be replaced by our five-byte jump.
+	// Different registers and field offsets are allowed; other encodings fail to match.
+	// The .cpp also verifies that "enabled" feeds ipc_EnableServerStateGroup.
+	inline std::optional<Predicate> decodeContext(std::span<const uint8_t> bytes)
+	{
+		const auto client = decodeClientRegister(bytes);
+		if (bytes.size() < ContextSize || !client)
+			return std::nullopt;
+		const uint8_t clientRegister = *client;
 
 		// REX + CMP r32,r32. Its left operand must be the value just loaded above.
 		if ((bytes[10] & 0xFA) != 0x40 || bytes[11] != 0x3B || (bytes[12] & 0xC0) != 0xC0)
@@ -80,6 +92,24 @@ namespace HOL::hacks::detail
 		Predicate result{{}, clientRegister, enableRegister};
 		std::copy_n(bytes.begin() + PredicateOffset, PredicateSize, result.original.begin());
 		return result;
+	}
+
+	// Recognize only our five-byte relative jump and two padding NOPs. This does not
+	// establish ownership: the caller must also validate its destination and full code.
+	inline std::optional<uintptr_t> decodeRedirect(std::span<const uint8_t> context,
+												   uintptr_t contextAddress)
+	{
+		if (context.size() < ContextSize || !decodeClientRegister(context)
+			|| context[PredicateOffset] != 0xE9 || context[PredicateOffset + 5] != 0x90
+			|| context[PredicateOffset + 6] != 0x90)
+			return std::nullopt;
+		int32_t displacement;
+		std::memcpy(&displacement, context.data() + PredicateOffset + 1, sizeof(displacement));
+		const auto target
+			= static_cast<int64_t>(contextAddress + PredicateOffset + 5) + displacement;
+		if (target <= 0)
+			return std::nullopt;
+		return static_cast<uintptr_t>(target);
 	}
 
 	inline std::vector<size_t> findContexts(std::span<const uint8_t> bytes)
@@ -156,5 +186,48 @@ namespace HOL::hacks::detail
 		const int32_t displacement = relativeJump(base + code.size(), resume);
 		std::memcpy(code.data() + 22, &displacement, sizeof(displacement));
 		return code;
+	}
+
+	struct RetainedPatch
+	{
+		Predicate predicate;
+		uint32_t ownerPid;
+	};
+
+	// A killed app leaves its redirect/code in OVRServer. Recover the original seven
+	// bytes from the start of that code, decode them against the surviving two loads,
+	// and regenerate the entire trampoline. Every byte, including its return jump,
+	// must agree. An arbitrary hook at the same site is never adopted by this check.
+	// Process lifetime, page ownership, and the permission call are checked in the .cpp.
+	inline std::optional<RetainedPatch> decodeRetainedPatch(std::span<const uint8_t> context,
+															uintptr_t contextAddress,
+															std::span<const uint8_t> code,
+															uintptr_t trampolineAddress)
+	{
+		const auto redirect = decodeRedirect(context, contextAddress);
+		if (!redirect || *redirect != trampolineAddress || code.size() != TrampolineSize)
+			return std::nullopt;
+		std::array<uint8_t, ContextSize> originalContext;
+		std::copy_n(context.begin(), ContextSize, originalContext.begin());
+		std::copy_n(code.begin(), PredicateSize, originalContext.begin() + PredicateOffset);
+		const auto predicate = decodeContext(originalContext);
+		if (!predicate)
+			return std::nullopt;
+		uint32_t ownerPid;
+		std::memcpy(&ownerPid, code.data() + 11, sizeof(ownerPid));
+		if (!ownerPid)
+			return std::nullopt;
+		try
+		{
+			const auto expected = buildTrampoline(
+				*predicate, ownerPid, trampolineAddress, contextAddress + ContextSize);
+			if (!std::equal(expected.begin(), expected.end(), code.begin(), code.end()))
+				return std::nullopt;
+		}
+		catch (const std::runtime_error&)
+		{
+			return std::nullopt; // An unreachable return jump cannot belong to our patch.
+		}
+		return RetainedPatch{*predicate, ownerPid};
 	}
 } // namespace HOL::hacks::detail
