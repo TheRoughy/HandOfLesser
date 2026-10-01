@@ -5,6 +5,8 @@
 namespace HOL::hacks
 {
 	// Owns a patch in OVRServer's memory, allowing background tracking for this app's PID.
+	// The exception keeps all of this app's focus-controlled state groups enabled,
+	// without changing focus ownership or permission decisions for other clients.
 	// The server-patch lifetime follows one HandOfLesser tracking run:
 	//   install() before OpenXR initialization -> use tracking -> restore() on shutdown.
 	class OvrServerTrackingPatch

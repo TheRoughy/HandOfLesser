@@ -1,98 +1,123 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <span>
 #include <stdexcept>
-#include <string_view>
 #include <vector>
-#include <utility>
 
-// This file describes the runtime instructions we recognize and the machine code
-// we generate. It does not read/write another process; oculus_server_patch.cpp does.
-//
-// The generated trampoline implements this rule:
-//   enabled = (clientPid == focusedPid);                 // original runtime rule
-//   if (clientPid == HandOfLesserPid && isTrackingService)
-//       enabled = true;                                  // our additional exception
-//
-// Registers at the patch site, established by the surrounding runtime code:
-//   R15D = client PID, R13D = focused PID, R12B = group-enable result.
-//   RSI  = ProxyServer object, which contains its service name.
-//
-// All addresses/fields below refer to the analyzed runtime layout. The search pattern
-// keeps the relevant registers and field offsets fixed so layout changes fail to match.
+// Discovery and code generation only; remote memory/lifecycle belong to the .cpp.
+// The trampoline adds one exception to the runtime's original permission rule:
+//   enabled = (clientPid == focusedPid) || (clientPid == HandOfLesserPid);
+// It does not change focus ownership or another client's permission result.
+// No service-name strings or C++ object layout are accessed by the trampoline.
 
 namespace HOL::hacks::detail
 {
-	// Identify the original check.
-
-	// cmp r15d,r13d; sete r12b
-	// Compare client/focused PIDs, then set the enable byte to 1 if they are equal.
-	inline constexpr std::array<uint8_t, 7>
-		OriginalPredicate{0x45, 0x3B, 0xFD, 0x41, 0x0F, 0x94, 0xC4};
-
-	// The check starts after the first two instructions (3 + 7 bytes) of our pattern.
 	inline constexpr size_t PredicateOffset = 10;
+	inline constexpr size_t PredicateSize = 7;
+	inline constexpr size_t ContextSize = PredicateOffset + PredicateSize;
+	inline constexpr size_t PermissionCallSearchSize = 128;
 
-	// -1 means a wildcard byte. Branch/call displacements can change when code moves;
-	// opcodes, registers, and object-field offsets must still match exactly.
-	// Keep one instruction per row so this can be compared with IDA's disassembly.
-	// clang-format off
-	inline constexpr int ContextPattern[] = {
-		0x48, 0x8B, 0x07,                         // mov rax,[rdi]
-		0x44, 0x8B, 0xB8, 0x98, 0x00, 0x00, 0x00, // mov r15d,[rax+98h]: client PID
-		0x45, 0x3B, 0xFD,                         // cmp r15d,r13d: focused PID
-		0x41, 0x0F, 0x94, 0xC4,                   // sete r12b: original enable result
-		0x8B, 0x88, 0x88, 0x00, 0x00, 0x00,       // mov ecx,[rax+88h]
-		0x8B, 0x40, 0x40,                         // mov eax,[rax+40h]
-		0x0D, 0x00, 0x00, 0x00, 0xF0,             // or eax,0F0000000h
-		0x3B, 0xC1,                               // cmp eax,ecx
-		0x0F, 0x84, -1, -1, -1, -1,              // je rel32
-		0x85, 0xC9,                               // test ecx,ecx
-		0x0F, 0x84, -1, -1, -1, -1,              // je rel32
-		0x48, 0x8B, 0x6C, 0x24, 0x50,             // mov rbp,[rsp+50h]
-		0x48, 0x3B, 0xDD,                         // cmp rbx,rbp
-		0x74, -1,                                // je rel8
-		0x0F, 0x1F, 0x80, 0x00, 0x00, 0x00, 0x00, // nop
-		0x44, 0x8B, 0x03,                         // mov r8d,[rbx]: state-group ID
-		0x48, 0x8B, 0x07,                         // mov rax,[rdi]
-		0x8B, 0x90, 0x88, 0x00, 0x00, 0x00,       // mov edx,[rax+88h]
-		0x8B, 0x4E, 0x20,                         // mov ecx,[rsi+20h]
-		0x90,                                     // nop
-		0x45, 0x0F, 0xB6, 0xCC,                   // movzx r9d,r12b: enable argument
-		0xE8, -1, -1, -1, -1,                    // call ipc_EnableServerStateGroup
-		0x84, 0xC0,                               // test al,al
-		0x75, -1,                                // jne rel8
-		0x48, 0x8D, 0x8E, 0x68, 0x04, 0x00, 0x00  // lea rcx,[rsi+468h]: service-name string
-	};
-	// clang-format on
-
-	inline bool matchesContext(std::span<const uint8_t> bytes)
+	struct Predicate
 	{
-		if (bytes.size() < std::size(ContextPattern))
-			return false;
-		for (size_t i = 0; i < std::size(ContextPattern); ++i)
-			if (ContextPattern[i] >= 0 && bytes[i] != ContextPattern[i])
-				return false;
-		return true;
+		std::array<uint8_t, PredicateSize> original;
+		uint8_t clientRegister;
+		uint8_t enableRegister;
+	};
+
+	// Recognize four instructions and follow their register relationships:
+	//   mov object,[iterator]
+	//   mov clientPid,[object+field]
+	//   cmp clientPid,focusedPid
+	//   sete enabled
+	// Decode only these forms, rather than introducing a general disassembler. The
+	// CMP/SETE must occupy seven bytes so they can be replaced by our five-byte jump.
+	// Different registers and field offsets are allowed; other encodings fail to match.
+	// The .cpp also verifies that "enabled" feeds ipc_EnableServerStateGroup.
+	inline std::optional<Predicate> decodeContext(std::span<const uint8_t> bytes)
+	{
+		if (bytes.size() < ContextSize)
+			return std::nullopt;
+
+		// REX.W + MOV r64,[r64]. Exclude SIB/RIP-relative addressing, which changes length.
+		if ((bytes[0] & 0xFA) != 0x48 || bytes[1] != 0x8B || (bytes[2] & 0xC0) != 0
+			|| (bytes[2] & 7) == 4 || (bytes[2] & 7) == 5)
+			return std::nullopt;
+		const uint8_t objectRegister = ((bytes[2] >> 3) & 7) | ((bytes[0] & 4) << 1);
+
+		// REX + MOV r32,[object+disp32]. The field is read by the runtime, not our code.
+		if ((bytes[3] & 0xFA) != 0x40 || bytes[4] != 0x8B || (bytes[5] & 0xC0) != 0x80
+			|| (bytes[5] & 7) == 4)
+			return std::nullopt;
+		const uint8_t baseRegister = (bytes[5] & 7) | ((bytes[3] & 1) << 3);
+		const uint8_t clientRegister = ((bytes[5] >> 3) & 7) | ((bytes[3] & 4) << 1);
+		if (baseRegister != objectRegister || clientRegister == 4)
+			return std::nullopt;
+
+		// REX + CMP r32,r32. Its left operand must be the value just loaded above.
+		if ((bytes[10] & 0xFA) != 0x40 || bytes[11] != 0x3B || (bytes[12] & 0xC0) != 0xC0)
+			return std::nullopt;
+		const uint8_t comparedRegister = ((bytes[12] >> 3) & 7) | ((bytes[10] & 4) << 1);
+		const uint8_t focusedRegister = (bytes[12] & 7) | ((bytes[10] & 1) << 3);
+		if (comparedRegister != clientRegister || focusedRegister == clientRegister
+			|| focusedRegister == 4)
+			return std::nullopt;
+
+		// REX + SETE r8. Require a low-byte register, never AH/CH/DH/BH or the stack pointer.
+		if ((bytes[13] & 0xFE) != 0x40 || bytes[14] != 0x0F || bytes[15] != 0x94
+			|| (bytes[16] & 0xF8) != 0xC0)
+			return std::nullopt;
+		const uint8_t enableRegister = (bytes[16] & 7) | ((bytes[13] & 1) << 3);
+		// The extra PID comparison happens after SETE; its source must remain intact.
+		if (enableRegister == clientRegister || enableRegister == 4)
+			return std::nullopt;
+
+		Predicate result{{}, clientRegister, enableRegister};
+		std::copy_n(bytes.begin() + PredicateOffset, PredicateSize, result.original.begin());
+		return result;
 	}
 
-	// Return every full match; the caller must require exactly one before patching.
 	inline std::vector<size_t> findContexts(std::span<const uint8_t> bytes)
 	{
 		std::vector<size_t> matches;
-		for (size_t i = 0; i + std::size(ContextPattern) <= bytes.size(); ++i)
-			if (matchesContext(bytes.subspan(i)))
-				matches.push_back(i);
+		for (size_t offset = 0; offset + ContextSize <= bytes.size(); ++offset)
+			if (decodeContext(bytes.subspan(offset)))
+				matches.push_back(offset);
 		return matches;
 	}
 
-	// Encode relative jumps.
+	// Independently identify the purpose of the decoded result. Within a bounded
+	// window, require MOVZX r9d,enabled immediately followed by a direct call to the
+	// DLL's exported group-enable function. Unrelated checks/padding between the
+	// predicate and this argument setup do not become part of the search signature.
+	inline bool feedsPermissionCall(std::span<const uint8_t> context,
+									uintptr_t contextAddress,
+									const Predicate& predicate,
+									uintptr_t permissionFunction)
+	{
+		const size_t size = std::min(context.size(), ContextSize + PermissionCallSearchSize);
+		for (size_t offset = ContextSize; offset + 9 <= size; ++offset)
+		{
+			if (context[offset] != (0x44 | (predicate.enableRegister >> 3))
+				|| context[offset + 1] != 0x0F || context[offset + 2] != 0xB6
+				|| context[offset + 3] != (0xC8 | (predicate.enableRegister & 7))
+				|| context[offset + 4] != 0xE8)
+				continue;
+			int32_t displacement;
+			std::memcpy(&displacement, context.data() + offset + 5, sizeof(displacement));
+			const auto target = static_cast<int64_t>(contextAddress + offset + 9) + displacement;
+			if (target == static_cast<int64_t>(permissionFunction))
+				return true;
+		}
+		return false;
+	}
 
-	// x64 relative jumps measure displacement from the END of the jump instruction.
-	// The destination therefore has to fit in signed 32 bits relative to "next".
+	// x64 relative jumps measure displacement from the END of the instruction.
 	inline int32_t relativeJump(uintptr_t next, uintptr_t target)
 	{
 		const auto delta = static_cast<int64_t>(target) - static_cast<int64_t>(next);
@@ -101,187 +126,35 @@ namespace HOL::hacks::detail
 		return static_cast<int32_t>(delta);
 	}
 
-	// Named destinations inside the trampoline. Their order preserves the existing
-	// emitted instruction layout; no numeric label IDs are needed in the code below.
-	enum TrampolineLabel : size_t
+	inline std::vector<uint8_t>
+	buildTrampoline(const Predicate& predicate, uint32_t appPid, uintptr_t base, uintptr_t resume)
 	{
-		Finish,
-		EnableTracking,
-		CheckBodyService,
-		CheckHandService,
-		LabelCount
-	};
+		if (!appPid || predicate.clientRegister > 15 || predicate.enableRegister > 15
+			|| predicate.clientRegister == 4 || predicate.enableRegister == 4
+			|| predicate.clientRegister == predicate.enableRegister)
+			throw std::runtime_error("Invalid tracking predicate or client PID");
 
-	// A small byte builder, not an assembler. emit() appends instruction bytes;
-	// value() appends a typed immediate/displacement in Windows' little-endian order.
-	// branch() remembers jumps whose destination has not been emitted yet.
-	class Code
-	{
-	public:
-		std::vector<uint8_t> bytes;
-
-		void emit(std::initializer_list<uint8_t> data)
-		{
-			bytes.insert(bytes.end(), data);
-		}
-
-		template <typename T> void value(T value)
-		{
-			const auto* start = reinterpret_cast<const uint8_t*>(&value);
-			bytes.insert(bytes.end(), start, start + sizeof(value));
-		}
-
-		void label(size_t label)
-		{
-			mLabels.at(label) = bytes.size();
-		}
-
-		void branch(std::initializer_list<uint8_t> opcode, size_t label)
-		{
-			emit(opcode);
-			mFixups.push_back({bytes.size(), label});
-			value<int32_t>(0); // Reserve four bytes; finish() fills in the real displacement.
-		}
-
-		std::vector<uint8_t> finish(uintptr_t base, uintptr_t resume)
-		{
-			// Resolve internal jumps now that every label's byte offset is known.
-			for (const auto& fixup : mFixups)
-			{
-				const auto displacement
-					= static_cast<int32_t>(static_cast<int64_t>(mLabels.at(fixup.destinationLabel))
-										   - static_cast<int64_t>(fixup.displacementOffset) - 4);
-				std::memcpy(
-					bytes.data() + fixup.displacementOffset, &displacement, sizeof(displacement));
-			}
-			// Append the final jump back into the original runtime function.
-			emit({0xE9});
-			value(relativeJump(base + bytes.size() + 4, resume));
-			return bytes;
-		}
-
-	private:
-		struct BranchFixup
-		{
-			size_t displacementOffset;
-			size_t destinationLabel;
+		// Only two registers are referenced, both discovered from the original code.
+		// No scratch registers or object dereferences are needed. Preserve the original
+		// comparison flags, and change only the enable register's low byte for our PID.
+		// clang-format off
+		std::vector<uint8_t> code{
+			0, 0, 0, 0, 0, 0, 0, // original CMP/SETE: retain the normal focus result
+			0x9C,                 // pushfq: save flags from the original comparison
+			static_cast<uint8_t>(0x40 | (predicate.clientRegister >> 3)),
+			0x81, static_cast<uint8_t>(0xF8 | (predicate.clientRegister & 7)),
+			0, 0, 0, 0,           // cmp clientPid,appPid (immediate filled below)
+			0x75, 0x03,           // jne +3: other clients keep their original enable byte
+			static_cast<uint8_t>(0x40 | (predicate.enableRegister >> 3)),
+			static_cast<uint8_t>(0xB0 | (predicate.enableRegister & 7)), 0x01, // mov enabled,1
+			0x9D,                 // popfq: restore original flags on either path
+			0xE9, 0, 0, 0, 0      // jmp resume (displacement filled below)
 		};
-		std::array<size_t, LabelCount> mLabels{};
-		std::vector<BranchFixup> mFixups;
-	};
-
-	// Emit the HandOfLesser PID filter.
-
-	inline void emitClientPidFilter(Code& code, uint32_t appPid)
-	{
-		code.emit({0x41, 0x81, 0xFF}); // cmp r15d,appPid
-		code.value(appPid);
-		code.branch({0x0F, 0x85}, Finish); // jne Finish: other clients keep the original result.
-	}
-
-	// Emit exact tracking-service name comparisons.
-
-	// At this point RAX points to the service-name characters. Compare all characters,
-	// not just a prefix: other similarly named services must keep their original policy.
-	inline void emitServiceNameComparison(Code& code, std::string_view name)
-	{
-		// Compare the first 16 characters as two eight-byte values using scratch R11.
-		for (size_t offset : {size_t{0}, size_t{8}})
-		{
-			uint64_t part;
-			std::memcpy(&part, name.data() + offset, sizeof(part));
-			code.emit({0x49, 0xBB}); // mov r11, eight literal name characters
-			code.value(part);
-			if (offset == 0)
-				code.emit({0x4C, 0x39, 0x18}); // cmp [rax],r11
-			else
-				code.emit({0x4C, 0x39, 0x58, 0x08}); // cmp [rax+8],r11
-			code.branch({0x0F, 0x85}, Finish);		 // jne Finish: name mismatch
-		}
-
-		// BodyApiServiceServer has four remaining characters; HandInputDataServer has three.
-		if (name.size() == 20)
-		{
-			uint32_t tail;
-			std::memcpy(&tail, name.data() + 16, sizeof(tail));
-			code.emit({0x81, 0x78, 0x10}); // cmp dword ptr [rax+16], final four characters
-			code.value(tail);
-		}
-		else
-		{
-			uint16_t tail;
-			std::memcpy(&tail, name.data() + 16, sizeof(tail));
-			code.emit({0x66, 0x81, 0x78, 0x10}); // cmp word ptr [rax+16], next two characters
-			code.value(tail);
-			code.branch({0x0F, 0x85}, Finish);
-			code.emit({0x80,
-					   0x78,
-					   0x12,
-					   static_cast<uint8_t>(name[18])}); // cmp [rax+18], final character
-		}
-		code.branch({0x0F, 0x85}, Finish);
-		code.branch({0xE9}, EnableTracking); // Complete exact match: allow this tracking service.
-	}
-
-	inline void emitTrackingServiceFilter(Code& code)
-	{
-		// ProxyServer stores an MSVC x64 std::string at RSI + 0x468:
-		//   +0x468: character pointer (or inline characters for short strings)
-		//   +0x478: length
-		//   +0x480: capacity
-		// Both target names exceed the 15-character inline limit, so require heap storage.
-		code.emit({0x48, 0x83, 0xBE, 0x80, 0x04, 0x00, 0x00, 0x0F}); // cmp [rsi+480h],15
-		code.branch({0x0F, 0x86}, Finish); // jbe Finish: short string cannot be a target service.
-
-		code.emit({0x48, 0x8B, 0x86, 0x68, 0x04, 0x00, 0x00}); // mov rax,[rsi+468h]: characters
-		code.emit({0x48, 0x85, 0xC0});						   // test rax,rax
-		code.branch({0x0F, 0x84}, Finish);					   // je Finish: no character buffer
-
-		// Use length to select which complete name comparison to run.
-		constexpr std::string_view services[] = {"BodyApiServiceServer", "HandInputDataServer"};
-		constexpr TrampolineLabel serviceLabels[] = {CheckBodyService, CheckHandService};
-		for (size_t i = 0; i < std::size(services); ++i)
-		{
-			code.emit({0x48, 0x83, 0xBE, 0x78, 0x04, 0x00, 0x00}); // cmp [rsi+478h],name length
-			code.emit({static_cast<uint8_t>(services[i].size())});
-			code.branch({0x0F, 0x84}, serviceLabels[i]); // je: length matches this candidate
-		}
-		code.branch({0xE9}, Finish); // Neither target length: keep original result.
-
-		for (size_t i = 0; i < std::size(services); ++i)
-		{
-			code.label(serviceLabels[i]);
-			emitServiceNameComparison(code, services[i]);
-		}
-	}
-
-	// Assemble the complete trampoline.
-
-	inline std::vector<uint8_t> buildTrampoline(uint32_t appPid, uintptr_t base, uintptr_t resume)
-	{
-		if (appPid == 0)
-			throw std::runtime_error("Invalid tracking client PID");
-		Code code;
-
-		// 1. Execute the displaced instructions so the original focus result remains
-		//    available for every client/service that our filters reject.
-		code.bytes.assign(OriginalPredicate.begin(), OriginalPredicate.end());
-
-		// 2. Save the flags from that original comparison and our scratch registers.
-		//    Our PID/name comparisons must not change the surrounding function's state.
-		code.emit({0x9C, 0x50, 0x41, 0x53}); // pushfq; push rax; push r11
-
-		// 3. All rejected clients/services jump straight to Finish.
-		emitClientPidFilter(code, appPid);
-		emitTrackingServiceFilter(code);
-
-		// 4. Only an exact tracking-service match for this app reaches this label.
-		code.label(EnableTracking);
-		code.emit({0x41, 0xB4, 0x01}); // mov r12b,1: change only the low enable byte
-
-		// 5. Restore scratch registers/flags and return after the seven displaced bytes.
-		code.label(Finish);
-		code.emit({0x41, 0x5B, 0x58, 0x9D}); // pop r11; pop rax; popfq
-		return code.finish(base, resume);
+		// clang-format on
+		std::copy(predicate.original.begin(), predicate.original.end(), code.begin());
+		std::memcpy(code.data() + 11, &appPid, sizeof(appPid));
+		const int32_t displacement = relativeJump(base + code.size(), resume);
+		std::memcpy(code.data() + 22, &displacement, sizeof(displacement));
+		return code;
 	}
 } // namespace HOL::hacks::detail

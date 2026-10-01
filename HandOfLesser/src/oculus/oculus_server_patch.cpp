@@ -7,10 +7,12 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <utility>
 
 // OVRServer stops publishing hand/body data to clients that are not focused.
-// We change its permission check to also allow this HandOfLesser process, but only
-// for the two tracking services. Other clients and services keep the original rule.
+// We change its permission check to also allow this HandOfLesser process. All of
+// this app's focus-controlled state groups remain enabled; other clients keep the
+// original rule. We do not change the foreground PID or exclusive-context request.
 //
 // The seven original instruction bytes are replaced with a jump to our "trampoline":
 // a small block of machine code allocated INSIDE OVRServer. It evaluates the original
@@ -212,14 +214,79 @@ namespace HOL::hacks
 			return sections;
 		}
 
-		uintptr_t findTrackingPermissionCheck(HANDLE process, const MODULEENTRY32W& module)
+		// Resolve the exported permission API from the remote PE export table. Its name
+		// is our stable anchor; we do not depend on its RVA or implementation bytes.
+		// readValidatedSections() must validate the PE headers before this is called.
+		uintptr_t findPermissionFunction(HANDLE process, const MODULEENTRY32W& module)
 		{
 			const auto base = reinterpret_cast<uintptr_t>(module.modBaseAddr);
-			std::vector<uintptr_t> matches;
+			auto readRva = [&](DWORD rva, size_t size)
+			{
+				if (rva > module.modBaseSize || size > module.modBaseSize - rva)
+					throw std::runtime_error("Invalid OVRServer export-table bounds");
+				return readRemoteBytes(process, base + rva, size);
+			};
+			auto readEntry = [](const Bytes& bytes, size_t index, auto& value)
+			{ std::memcpy(&value, bytes.data() + index * sizeof(value), sizeof(value)); };
+			auto dos = readRemoteObject<IMAGE_DOS_HEADER>(process, base);
+			auto nt = readRemoteObject<IMAGE_NT_HEADERS64>(process, base + dos.e_lfanew);
+			const auto directory = nt.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+			if (!directory.VirtualAddress || directory.Size < sizeof(IMAGE_EXPORT_DIRECTORY))
+				throw std::runtime_error("OVRServer IPC DLL has no export directory");
+			auto exportBytes = readRva(directory.VirtualAddress, directory.Size);
+			IMAGE_EXPORT_DIRECTORY exports;
+			std::memcpy(&exports, exportBytes.data(), sizeof(exports));
+			if (!exports.NumberOfNames || exports.NumberOfNames > 65536
+				|| !exports.NumberOfFunctions || exports.NumberOfFunctions > 65536)
+				throw std::runtime_error("Invalid OVRServer export counts");
+			auto names = readRva(exports.AddressOfNames, exports.NumberOfNames * sizeof(DWORD));
+			auto ordinals
+				= readRva(exports.AddressOfNameOrdinals, exports.NumberOfNames * sizeof(WORD));
+			auto functions
+				= readRva(exports.AddressOfFunctions, exports.NumberOfFunctions * sizeof(DWORD));
+			constexpr char name[] = "ipc_EnableServerStateGroup";
+			for (DWORD i = 0; i < exports.NumberOfNames; ++i)
+			{
+				DWORD nameRva;
+				readEntry(names, i, nameRva);
+				if (nameRva > module.modBaseSize || sizeof(name) > module.modBaseSize - nameRva)
+					continue;
+				auto text = readRva(nameRva, sizeof(name));
+				if (std::memcmp(text.data(), name, sizeof(name)) != 0)
+					continue;
+				WORD ordinal;
+				readEntry(ordinals, i, ordinal);
+				if (ordinal >= exports.NumberOfFunctions)
+					throw std::runtime_error("Invalid OVRServer permission export ordinal");
+				DWORD functionRva;
+				readEntry(functions, ordinal, functionRva);
+				// A forwarded export points to a name, not code. Do not guess its target.
+				if (!functionRva || functionRva >= module.modBaseSize
+					|| (functionRva >= directory.VirtualAddress
+						&& functionRva - directory.VirtualAddress < directory.Size))
+					throw std::runtime_error("Unsupported OVRServer permission export target");
+				return base + functionRva;
+			}
+			throw std::runtime_error("OVRServer IPC DLL has no ipc_EnableServerStateGroup export");
+		}
 
-			// Search code sections only. The pattern describes the surrounding control flow;
-			// PredicateOffset selects the seven bytes inside that pattern that we replace.
-			for (const auto& section : readValidatedSections(process, module))
+		struct PermissionCheck
+		{
+			uintptr_t address;
+			detail::Predicate predicate;
+			Bytes context;
+		};
+
+		PermissionCheck findTrackingPermissionCheck(HANDLE process, const MODULEENTRY32W& module)
+		{
+			const auto base = reinterpret_cast<uintptr_t>(module.modBaseAddr);
+			const auto sections = readValidatedSections(process, module);
+			const auto permissionFunction = findPermissionFunction(process, module);
+			std::vector<PermissionCheck> matches;
+
+			// First recognize the short PID-comparison sequence, then verify its purpose
+			// through the exported permission call. No service names or padding are matched.
+			for (const auto& section : sections)
 			{
 				if (!(section.Characteristics & IMAGE_SCN_MEM_EXECUTE))
 					continue;
@@ -232,14 +299,25 @@ namespace HOL::hacks
 
 				auto bytes = readRemoteBytes(process, base + section.VirtualAddress, size);
 				for (size_t offset : detail::findContexts(bytes))
-					matches.push_back(base + section.VirtualAddress + offset
-									  + detail::PredicateOffset);
+				{
+					const auto context = std::span<const uint8_t>(bytes).subspan(
+						offset,
+						std::min(size - offset,
+								 detail::ContextSize + detail::PermissionCallSearchSize));
+					const auto predicate = *detail::decodeContext(context);
+					const auto address = base + section.VirtualAddress + offset;
+					if (detail::feedsPermissionCall(
+							context, address, predicate, permissionFunction))
+						matches.push_back({address + detail::PredicateOffset,
+										   predicate,
+										   Bytes(context.begin(), context.end())});
+				}
 			}
 
 			// A partial match or two complete matches cannot identify the intended check.
 			if (matches.size() != 1)
 				throw std::runtime_error(
-					"Expected one complete OVRServer tracking predicate pattern, found "
+					"Expected one verified OVRServer tracking predicate, found "
 					+ std::to_string(matches.size()) + "; no patch applied");
 			return matches.front();
 		}
@@ -408,7 +486,7 @@ namespace HOL::hacks
 									 "GetThreadContext(OVRServer)");
 					const bool inOriginalCheck
 						= context.Rip >= patchAddress
-						  && context.Rip < patchAddress + detail::OriginalPredicate.size();
+						  && context.Rip < patchAddress + detail::PredicateSize;
 					const bool inTrampoline = trampolineAddress && context.Rip >= trampolineAddress
 											  && context.Rip < trampolineAddress + trampolineSize;
 					if (inOriginalCheck || inTrampoline)
@@ -442,6 +520,8 @@ namespace HOL::hacks
 
 		// Both addresses refer to memory in OVRServer, not in our own process.
 		uintptr_t predicateAddress = 0;
+		detail::Predicate predicate{};
+		Bytes originalContext;
 		uintptr_t trampolineAddress = 0;
 		Bytes trampolineBytes;
 		Bytes redirectBytes;
@@ -496,10 +576,10 @@ namespace HOL::hacks
 		void prepareTrampoline()
 		{
 			trampolineAddress = allocateTrampolineNear(serverProcess.value, predicateAddress);
-			trampolineBytes
-				= detail::buildTrampoline(GetCurrentProcessId(),
-										  trampolineAddress,
-										  predicateAddress + detail::OriginalPredicate.size());
+			trampolineBytes = detail::buildTrampoline(predicate,
+													  GetCurrentProcessId(),
+													  trampolineAddress,
+													  predicateAddress + detail::PredicateSize);
 
 			// Fill a writable page before any runtime instruction can jump into it.
 			writeRemoteBytes(serverProcess.value, trampolineAddress, trampolineBytes);
@@ -529,7 +609,10 @@ namespace HOL::hacks
 		{
 			// 1. Find the loaded DLL and its unique focus/permission check.
 			auto module = findModule(serverPid);
-			predicateAddress = findTrackingPermissionCheck(serverProcess.value, module);
+			auto check = findTrackingPermissionCheck(serverProcess.value, module);
+			predicateAddress = check.address;
+			predicate = check.predicate;
+			originalContext = std::move(check.context);
 
 			// 2. Prepare both pieces of code; OVRServer still executes the original check.
 			prepareTrampoline();
@@ -537,7 +620,7 @@ namespace HOL::hacks
 
 			// 3. Pause the server briefly and replace the check with our jump.
 			mayHaveChangedPredicate = true;
-			replacePredicate(detail::OriginalPredicate, redirectBytes);
+			replacePredicate(predicate.original, redirectBytes);
 
 			std::cout << "Oculus background tracking patch installed in OVRServer PID " << std::dec
 					  << serverPid << " for HandOfLesser PID " << GetCurrentProcessId()
@@ -545,6 +628,7 @@ namespace HOL::hacks
 					  << std::hex
 					  << predicateAddress - reinterpret_cast<uintptr_t>(module.modBaseAddr)
 					  << "), trampoline " << reinterpret_cast<void*>(trampolineAddress) << std::dec
+					  << " (" << trampolineBytes.size() << " bytes, PID-only permission override)"
 					  << std::endl;
 		}
 
@@ -559,15 +643,16 @@ namespace HOL::hacks
 					"OVRServer patch ownership check failed; refusing to overwrite bytes");
 
 			const bool installing
-				= std::equal(expected.begin(), expected.end(), detail::OriginalPredicate.begin());
+				= std::equal(expected.begin(), expected.end(), predicate.original.begin());
 			if (!mayHaveChangedPredicate || installing)
 			{
-				// Recheck the full signature after pausing, closing the gap between scanning
-				// and writing. During restoration the signature contains our jump instead.
-				if (!detail::matchesContext(
-						readRemoteBytes(serverProcess.value,
-										predicateAddress - detail::PredicateOffset,
-										std::size(detail::ContextPattern))))
+				// Compare against THIS build's discovery snapshot after pausing. This guards
+				// against concurrent code changes, without making unrelated bytes part of
+				// the signature used to recognize future runtime versions.
+				if (readRemoteBytes(serverProcess.value,
+									predicateAddress - detail::PredicateOffset,
+									originalContext.size())
+					!= originalContext)
 					throw std::runtime_error(
 						"OVRServer predicate context changed before installation");
 			}
@@ -656,12 +741,11 @@ namespace HOL::hacks
 			if (!mayHaveChangedPredicate)
 				return;
 
-			auto current = readRemoteBytes(
-				serverProcess.value, predicateAddress, detail::OriginalPredicate.size());
+			auto current
+				= readRemoteBytes(serverProcess.value, predicateAddress, detail::PredicateSize);
 			if (current == redirectBytes)
-				replacePredicate(redirectBytes, detail::OriginalPredicate);
-			else if (current
-					 != Bytes(detail::OriginalPredicate.begin(), detail::OriginalPredicate.end()))
+				replacePredicate(redirectBytes, predicate.original);
+			else if (current != Bytes(predicate.original.begin(), predicate.original.end()))
 				throw std::runtime_error(
 					"OVRServer patch bytes changed; retaining trampoline until server restart");
 
