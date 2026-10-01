@@ -16,6 +16,7 @@
 #include "src/openxr/virtual_desktop_tracking_source.h"
 #include "src/core/features_manager.h"
 #include "src/core/state_global.h"
+#include "src/oculus/oculus_server_patch.h"
 
 using namespace HOL;
 using namespace HOL::OpenXR;
@@ -48,6 +49,8 @@ namespace HOL
 		FeaturesManager featuresManager;
 
 	private:
+		// Own the server override for the lifetime of this tracking run.
+		hacks::OvrServerTrackingPatch mOvrServerTrackingPatch;
 		InstanceHolder mInstanceHolder;
 		HandTracking mHandTracking;
 		BodyTracking mBodyTracking;

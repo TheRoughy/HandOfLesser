@@ -17,6 +17,7 @@
 	src/core/ui/ui_graphics.cpp
 	src/openxr/XrUtils.cpp
 	src/oculus/oculus_hacks.cpp
+	src/oculus/oculus_server_patch.cpp
 	src/vrchat/vrchat_osc.cpp
 	src/openxr/openxr_state.cpp
 	src/windows/crash_handler.cpp

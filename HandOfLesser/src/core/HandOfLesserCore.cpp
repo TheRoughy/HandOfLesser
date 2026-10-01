@@ -28,6 +28,15 @@ HandOfLesserCore::HandOfLesserCore()
 
 HandOfLesserCore::~HandOfLesserCore()
 {
+	// Exception paths can bypass mainLoop's normal joins (including runtime shutdown failures).
+	// Stop workers before member destruction so the server patch owner can clean up as well.
+	this->mShouldTerminate.store(true);
+	this->mActive.store(false);
+	this->mOvrServerTrackingPatch.restore();
+	if (this->mUserInterfaceThread.joinable())
+		this->mUserInterfaceThread.join();
+	if (this->mReceiveThread.joinable())
+		this->mReceiveThread.join();
 	if (Current == this)
 	{
 		Current = nullptr;
@@ -59,7 +68,7 @@ void HandOfLesserCore::init(int serverPort)
 	}
 
 	std::string runtimePath = HOL::OpenXR::getActiveOpenXRRuntimePath(1);
-	std::string runtimeName = HOL::OpenXR::getActiveOpenXRRuntimeName(1);
+	std::string runtimeName = HOL::OpenXR::getOpenXRRuntimeName(runtimePath);
 	std::cout << "Active OpenXR Runtime is: " << runtimePath << std::endl;
 
 	auto& runtimeState = state::Runtime;
@@ -145,6 +154,11 @@ void HandOfLesserCore::init(int serverPort)
 	}
 	else
 	{
+		if (runtimeState.isOVR)
+		{
+			// Install before OpenXR registers any tracking clients with OVRServer.
+			this->mOvrServerTrackingPatch.install();
+		}
 		this->mInstanceHolder.init();
 		runtimeState.openxrState = this->mInstanceHolder.getState();
 
@@ -176,6 +190,7 @@ void HandOfLesserCore::init(int serverPort)
 		if (this->mInstanceHolder.getState() == OpenXrState::Failed)
 		{
 			runtimeState.trackingProviderState = state::TrackingProviderState::Failed;
+			this->mOvrServerTrackingPatch.restore();
 		}
 	}
 
@@ -556,6 +571,8 @@ void HandOfLesserCore::mainLoop()
 	}
 
 	std::cout << "Exiting loop" << std::endl;
+	// Restore before shutdown runtime calls, which may stall after Link disconnects.
+	this->mOvrServerTrackingPatch.restore();
 
 	// Shut it down!
 	if (state::Runtime.trackingProvider == state::TrackingProvider::OpenXR)

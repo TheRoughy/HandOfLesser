@@ -225,8 +225,16 @@ void InstanceHolder::endSession()
 {
 	if (mState == OpenXrState::Running)
 	{
-		this->mSession->requestExitSession(this->mDispatcher);
-		this->mSession->endSession(this->mDispatcher);
+		// xrEndSession is only legal after the runtime reports STOPPING. Request exit
+		// without throwing during shutdown; unique-session destruction finishes cleanup
+		// if that transition has not arrived yet.
+		if (this->mSessionState != xr::SessionState::Stopping)
+		{
+			handleXR("xrRequestExitSession call", xrRequestExitSession(this->mSession.get()));
+			this->pollEvent();
+		}
+		if (this->mSessionState == xr::SessionState::Stopping)
+			handleXR("xrEndSession call", xrEndSession(this->mSession.get()));
 		this->updateState(OpenXrState::Exited);
 	}
 }
@@ -283,6 +291,7 @@ void InstanceHolder::initExtensions()
 {
 	state::Runtime.supportsBodyTracking
 		= hasExtension(this->mExtensions, XR_FB_BODY_TRACKING_EXTENSION_NAME);
+
 	state::Runtime.supportsHandTrackingAim
 		= hasExtension(this->mExtensions, XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME);
 	state::Runtime.supportsHandTrackingDataSource
