@@ -1,0 +1,73 @@
+name: Release Windows Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: Keep the release as a draft instead of publishing immediately
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Avoid two builds replacing the same release asset at once.
+concurrency:
+  group: release-windows
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # build.bat requires Visual Studio 2022, rather than whichever version is latest.
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository and dependencies
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build application and driver
+        shell: cmd
+        run: call build.bat release --clean
+
+      - name: Read build version
+        id: build
+        shell: pwsh
+        run: |
+          $version = ((Get-Content output/version.txt -Raw).Trim() -split '\s+')[0]
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            throw "Unexpected build version: $version"
+          }
+          $tag = "v$version"
+          # Never attach binaries from a newer commit to an older version tag.
+          $tagCommit = git rev-parse --verify --quiet "refs/tags/${tag}^{commit}"
+          if ($LASTEXITCODE -eq 0 -and $tagCommit -ne $env:GITHUB_SHA) {
+            throw "Tag $tag belongs to another commit. Increment HOL_VERSION before releasing."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          exit 0
+
+      - name: Build installer
+        shell: cmd
+        run: call build_installer.bat
+
+      # Keep a downloadable copy even if publishing the release fails.
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HandOfLesser-${{ steps.build.outputs.version }}-windows
+          path: distribution/HandOfLesserInstaller.exe
+          if-no-files-found: error
+
+      - name: Create release and upload installer
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.build.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: HandOfLesser ${{ steps.build.outputs.version }}
+          draft: ${{ inputs.draft }}
+          fail_on_unmatched_files: true
+          files: distribution/HandOfLesserInstaller.exe
