@@ -23,9 +23,6 @@ Download and run the installer from Releases. This installs the SteamVR add-on a
 
 Hand and body tracking must be enabled on the Quest.
 
-`HandOfLesser.exe` is also provided as a standalone application, but is only useful for VRChat OSC with Virtual Desktop, with degraded results. 
-Installing the complete driver is highly recommended.
-
 ### Virtual Desktop
 
 Enable `Forward tracking data` inside Virtual Desktop's Quest interface. The option is in the `Streaming` section.
@@ -51,12 +48,14 @@ The system default OpenXR runtime is used by default. You can explicitly select 
 - Use `Auto` to keep the system default runtime.
 - Use `virtualdesktop-openxr` for Virtual Desktop.
 - Use `oculus_openxr_64` for Quest Link.
+- Use `steamxr_win64` for Steam Link.
 
 Click `Restart` after changing the runtime.
 
 Set `Hand tracking mode` to `Emulate separate controller` to enable controller emulation.
 
 Review the default gesture inputs in the `Input` tab before continuing. You may want to customize them.
+Notably, the left-hand menu gesture gestures that you look at your hand and hold the gesture.
 
 Most options in the interface have tooltips explaining what they do.
 

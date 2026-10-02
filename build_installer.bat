@@ -56,10 +56,14 @@ popd
 
 if not "%RESULT%"=="0" exit /b %RESULT%
 
-copy /Y "%APP_EXE%" "%DIST_DIR%\HandOfLesser.exe" >nul
-if errorlevel 1 (
-	echo Failed to copy HandOfLesser.exe into distribution.
-	exit /b 1
+REM The app requires openvr_api.dll, so distribute it through the installer only.
+REM Remove the standalone executable left by earlier packaging runs.
+if exist "%DIST_DIR%\HandOfLesser.exe" (
+	del /Q "%DIST_DIR%\HandOfLesser.exe"
+	if errorlevel 1 (
+		echo Failed to remove the old standalone HandOfLesser.exe from distribution.
+		exit /b 1
+	)
 )
 
 exit /b 0
