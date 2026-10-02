@@ -33,6 +33,9 @@ public:
 	bool active = false;
 
 private:
+	// Body head joint sits below and behind the eye/view origin, measured in HMD-local meters.
+	inline static const Eigen::Vector3f HmdLocalHeadOffset{0.0f, -0.093f, 0.075f};
+
 	struct StoredPalmTransform
 	{
 		Eigen::Vector3f relativePos = Eigen::Vector3f::Zero();

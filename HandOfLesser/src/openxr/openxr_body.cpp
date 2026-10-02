@@ -283,6 +283,8 @@ void OpenXRBody::setFallbackJointLocations(
 	}
 
 	HOL::PoseLocation headPose = *hmdPose;
+	// Rotate the offset with the headset so the estimated head joint follows head turns and tilt.
+	headPose.position += hmdPose->orientation * HmdLocalHeadOffset;
 	headPose.orientation = getBodyJointOrientation(hmdPose->orientation);
 	mJointLocations[XR_BODY_JOINT_HEAD_FB] = OpenXR::toXrBodyJointLocation(headPose);
 	mJointLocations[XR_BODY_JOINT_CHEST_FB]
