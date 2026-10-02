@@ -61,12 +61,12 @@ Most options in the interface have tooltips explaining what they do.
 
 ## VRChat OSC
 
-The recommended setup uses the HandOfLesser Modular Avatar package. Add <https://theroughy.github.io/HandOfLesser/index.json> as a VCC repository and install `HandOfLesser - Modular Avatar` in the avatar project.
+The recommended setup uses the HandOfLesser Modular Avatar package. Add <https://theroughy.github.io/HandOfLesser/index.json> as a VCC repository, or visit <https://theroughy.github.io/HandOfLesser/> and click the add button, and install `HandOfLesser - Modular Avatar` in the avatar project.
 Drag the included `HandOfLesser_ModularAvatar` prefab under the avatar root.
 
 You can also copy the `Unity/Assets/HandOfLesser` folder from this git repository into your unity project's Assets folder and manually generate and assign the files, without using modular avatar. You will find the genrator in the `Tools` menu.
 
-Due to the number of synced parameters and generally complexity of the setup, it is recommended you use a dedicated avatar for this rather than attempting to toggle HandOfLesser integration on and off. To avoid confusion it is set up to always replace VRChat's own hand tracking, evne if "Avatar uses finger tracking" is enabled in the VRChat settings. 
+Due to the number of synced parameters and generally complexity of the setup, it is recommended you use a dedicated avatar for this rather than attempting to toggle HandOfLesser integration on and off. To avoid confusion it is set up to always replace VRChat's own hand tracking, ~~even if "Avatar uses finger tracking" is enabled in the VRChat settings.~~ but you still have to disable "Avatar uses finger tracking" in VRChat for it to work. Will fix later.
 
 You can adjust finger bend and curl behavior in the `VRChat` tab of the HandOfLesser interface.
 
