@@ -1,6 +1,6 @@
 ﻿cmake_minimum_required (VERSION 3.8)
 
-set(HOL_VERSION "0.9.0.0")
+set(HOL_VERSION "0.9.1.0")
 
 # Enable Hot Reload for MSVC compilers if supported.
 if (POLICY CMP0141)
