@@ -117,6 +117,10 @@ void HandOfLesserCore::init(int serverPort)
 	// already stable at high update rates.
 	Config.steamvr.poseSmoothing = runtimeState.isOVR ? Config.steamvr.oculusPoseSmoothing
 											 : Config.steamvr.standardPoseSmoothing;
+	// Oculus hand data becomes noisy when polled too frequently; keep its interval independent.
+	Config.general.updateIntervalMS = runtimeState.isOVR
+		? Config.general.oculusUpdateIntervalMS
+		: Config.general.standardUpdateIntervalMS;
 
 	if (!Config.openxr.forceOpenXRTracking)
 	{
@@ -895,6 +899,10 @@ void HOL::HandOfLesserCore::saveSettings()
 	auto& poseSmoothing = state::Runtime.isOVR ? Config.steamvr.oculusPoseSmoothing
 											 : Config.steamvr.standardPoseSmoothing;
 	poseSmoothing = Config.steamvr.poseSmoothing;
+	auto& updateInterval = state::Runtime.isOVR
+		? Config.general.oculusUpdateIntervalMS
+		: Config.general.standardUpdateIntervalMS;
+	updateInterval = Config.general.updateIntervalMS;
 
 	std::ofstream file(HOL::Paths::getSettingsFilePath());
 	nlohmann::json j = Config;

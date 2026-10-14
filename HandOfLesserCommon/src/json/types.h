@@ -65,6 +65,8 @@ namespace HOL
 		{
 			j = {{"motionPredictionMS", settings.motionPredictionMS},
 				 {"updateIntervalMS", settings.updateIntervalMS},
+				 {"standardUpdateIntervalMS", settings.standardUpdateIntervalMS},
+				 {"oculusUpdateIntervalMS", settings.oculusUpdateIntervalMS},
 				 {"skeletalUpdateIntervalMS", settings.skeletalUpdateIntervalMS},
 				 {"minTrackedJointsForQuality", settings.minTrackedJointsForQuality}};
 		}
@@ -73,6 +75,10 @@ namespace HOL
 		{
 			nlohmann::get_to_if_present(j, "motionPredictionMS", settings.motionPredictionMS);
 			nlohmann::get_to_if_present(j, "updateIntervalMS", settings.updateIntervalMS);
+			// Preserve the old shared interval for standard runtimes; Oculus starts with its own default.
+			settings.standardUpdateIntervalMS = settings.updateIntervalMS;
+			nlohmann::get_to_if_present(j, "standardUpdateIntervalMS", settings.standardUpdateIntervalMS);
+			nlohmann::get_to_if_present(j, "oculusUpdateIntervalMS", settings.oculusUpdateIntervalMS);
 			nlohmann::get_to_if_present(
 				j, "skeletalUpdateIntervalMS", settings.skeletalUpdateIntervalMS);
 			nlohmann::get_to_if_present(

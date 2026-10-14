@@ -109,10 +109,18 @@ namespace HOL
 			// clang-format on
 		};
 
+		inline int defaultUpdateIntervalMS(bool oculus)
+		{
+			return oculus ? 5 : 1;
+		}
+
 		struct GeneralSettings
 		{
 			int motionPredictionMS = 15; // Ignored by VD, reasonable for Oculus
 			int updateIntervalMS = 1;
+			// The main loop and UI use updateIntervalMS; runtime-specific values are selected at startup.
+			int standardUpdateIntervalMS = defaultUpdateIntervalMS(false);
+			int oculusUpdateIntervalMS = defaultUpdateIntervalMS(true);
 			int skeletalUpdateIntervalMS = 5;
 			int minTrackedJointsForQuality
 				= 26; // Minimum tracked joints to consider tracking valid

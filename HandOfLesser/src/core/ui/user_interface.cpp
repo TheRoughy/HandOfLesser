@@ -2276,7 +2276,7 @@ void HOL::UserInterface::buildMain()
 	{
 		HOL::settings::GeneralSettings defaults;
 		Config.general.motionPredictionMS = defaults.motionPredictionMS;
-		Config.general.updateIntervalMS = defaults.updateIntervalMS;
+		Config.general.updateIntervalMS = HOL::settings::defaultUpdateIntervalMS(state::Runtime.isOVR);
 		Config.general.skeletalUpdateIntervalMS = defaults.skeletalUpdateIntervalMS;
 	}
 
