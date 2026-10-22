@@ -92,9 +92,12 @@ OpenXRBody::~OpenXRBody()
 	this->shutdown();
 }
 
-void OpenXRBody::calibrateTrackers()
+void OpenXRBody::calibrateTracker(HOL::HandSide side)
 {
-	mTrackerCalibrationRequested.store(true);
+	if (side >= HOL::LeftHand && side < HOL::HandSide_MAX)
+	{
+		mTrackerCalibrationRequested[side].store(true);
+	}
 }
 
 void OpenXRBody::shutdown()
@@ -128,29 +131,14 @@ void OpenXRBody::updateJointLocations(XrSpace space,
 	// subset needed for torso-relative hand fallback and gestures.
 	mUsingExternalBody = externalSample != nullptr;
 	const bool usingSyntheticBody = mBodyTracker == nullptr && externalSample == nullptr;
-	const auto fallbackMode = HOL::Config.bodyTracking.handFallbackMode;
-	if (fallbackMode != mFallbackMode)
-	{
-		// Different fallback modes use different reference frames; never reuse their offsets.
-		for (int side = 0; side < HOL::HandSide_MAX; side++)
-		{
-			mStoredPalmTransforms[side] = {};
-			mHandTrackingAcquiredTime[side] = 0;
-			mWasHandTrackingTracked[side] = false;
-		}
-		mFallbackMode = fallbackMode;
-	}
 	if (usingSyntheticBody != mUsingSyntheticBody)
 	{
 		// Arm-relative offsets cannot be reused with an estimated torso, or vice versa.
 		for (int side = 0; side < HOL::HandSide_MAX; side++)
 		{
-			if (fallbackMode != HOL::HandFallbackMode::LighthouseTracker)
-			{
-				mStoredPalmTransforms[side] = {};
-				mHandTrackingAcquiredTime[side] = 0;
-				mWasHandTrackingTracked[side] = false;
-			}
+			mStoredPalmTransforms[side] = {};
+			mHandTrackingAcquiredTime[side] = 0;
+			mWasHandTrackingTracked[side] = false;
 		}
 		mUsingSyntheticBody = usingSyntheticBody;
 	}
@@ -187,35 +175,25 @@ void OpenXRBody::updateJointLocations(XrSpace space,
 				  XrBodyJointLocationFB{});
 		HOL::display::BodyTracking.headPoseValid = false;
 		HOL::display::BodyTracking.confidence = confidence;
-		// Selected trackers can still supply hand fallback when runtime body tracking is absent.
-		if (fallbackMode != HOL::HandFallbackMode::LighthouseTracker)
-		{
-			return;
-		}
+		return;
 	}
 
-	// Runtime palm joints have proven inconsistent across providers, so always derive them from
-	// the surrounding middle-finger joints.
-	reconstructPalmJoint(HandSide::LeftHand);
-	reconstructPalmJoint(HandSide::RightHand);
-	for (int side = 0; side < HOL::HandSide_MAX; side++)
+	// Real body palms are derived from their surrounding finger joints. Synthetic body data
+	// already uses reconstructed hand-tracking palms and has no finger joints to reconstruct from.
+	if (!usingSyntheticBody)
 	{
-		mRuntimePalmJoints[side] = !usingSyntheticBody && active
-			? mJointLocations[side == HOL::LeftHand ? XR_BODY_JOINT_LEFT_HAND_PALM_FB
-				: XR_BODY_JOINT_RIGHT_HAND_PALM_FB] : XrBodyJointLocationFB{};
+		reconstructPalmJoint(HandSide::LeftHand);
+		reconstructPalmJoint(HandSide::RightHand);
 	}
 
 	// Preserve palm pose when hand tracking is lost.
 	// Use metacarpal tracking state to detect loss - fingers remain tracked until fully lost
 	// VDXR marks wrist onwards as tracked when tracked, rest untracked.
 	// Oculus only marks metacarpal and onwards.
-	if (fallbackMode == HOL::HandFallbackMode::BodyTracking)
+	for (int side = 0; side < HOL::HandSide_MAX; side++)
 	{
-		for (int side = 0; side < HOL::HandSide_MAX; side++)
-		{
-			updatePalmFallback(static_cast<HandSide>(side), time, *lastHandPoses[side],
-				usingSyntheticBody);
-		}
+		updatePalmFallback(static_cast<HandSide>(side), time, *lastHandPoses[side],
+			usingSyntheticBody);
 	}
 
 	if (usingSyntheticBody)
@@ -237,30 +215,30 @@ void OpenXRBody::updateJointLocations(XrSpace space,
 	HOL::display::BodyTracking.confidence = this->confidence;
 }
 
-void OpenXRBody::updateTrackerFallback(XrTime time,
+void OpenXRBody::updateTrackerPalms(
 	const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
 	const HOL::SteamVR::FallbackTrackerSource::TrackerPoses& trackerReferences)
 {
 	mTrackerPalmVelocities = {};
-	const bool calibrate = mTrackerCalibrationRequested.exchange(false);
-	if (HOL::Config.bodyTracking.handFallbackMode != HOL::HandFallbackMode::LighthouseTracker)
-	{
-		for (auto& ready : HOL::display::BodyTracking.trackerCalibrationReady)
-		{
-			ready.store(false);
-		}
-		return;
-	}
-
 	active = mBodyActive;
 	for (int side = 0; side < HOL::HandSide_MAX; side++)
 	{
-		updateTrackerPalm(static_cast<HandSide>(side), time, *lastHandPoses[side],
-			trackerReferences[side], calibrate);
+		const bool calibrate = mTrackerCalibrationRequested[side].exchange(false);
 		const auto joint = side == HOL::LeftHand
 			? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB;
+		// Keep normal body fallback underneath the tracker overlay. Missing, uncalibrated, or
+		// disabled trackers leave this path available without changing its stored transforms.
 		mCorrectedJointLocations[joint] = mJointLocations[joint];
-		active |= hasValidPose(mJointLocations[joint]);
+		if (HOL::Config.handPose.useLighthouseTracker[side])
+		{
+			updateTrackerPalm(static_cast<HandSide>(side), *lastHandPoses[side],
+				trackerReferences[side], calibrate);
+			active |= isUsingTracker(static_cast<HandSide>(side));
+		}
+		else
+		{
+			HOL::display::HandTransform[side].trackerCalibrationReady.store(false);
+		}
 	}
 }
 
@@ -274,9 +252,15 @@ const XrBodyJointLocationFB* OpenXRBody::getLastJointLocations() const
 	return this->mCorrectedJointLocations;
 }
 
-const XrBodyJointLocationFB& OpenXRBody::getRuntimePalmJoint(HOL::HandSide side) const
+const XrBodyJointLocationFB& OpenXRBody::getBodyPalmJoint(HOL::HandSide side) const
 {
-	return mRuntimePalmJoints[side];
+	return mJointLocations[side == HOL::LeftHand
+		? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB];
+}
+
+bool OpenXRBody::isUsingTracker(HOL::HandSide side) const
+{
+	return mTrackerPalmVelocities[side].has_value();
 }
 
 HOL::PoseVelocity OpenXRBody::getFallbackPalmVelocity(HOL::HandSide side) const
@@ -335,8 +319,8 @@ void OpenXRBody::setFallbackJointLocations(
 
 	for (int side = 0; side < HOL::HandSide_MAX; side++)
 	{
-		const HOL::HandPose& handPose = *lastHandPoses[side];
-		if (!handPose.poseValid || !handPose.poseTracked)
+		const auto& trackedPalm = lastHandPoses[side]->trackedPalmLocation;
+		if (!trackedPalm)
 		{
 			continue;
 		}
@@ -345,7 +329,7 @@ void OpenXRBody::setFallbackJointLocations(
 										? XR_BODY_JOINT_LEFT_HAND_PALM_FB
 										: XR_BODY_JOINT_RIGHT_HAND_PALM_FB;
 		auto& palm = mJointLocations[palmJoint];
-		palm = OpenXR::toXrBodyJointLocation(handPose.palmLocation);
+		palm = OpenXR::toXrBodyJointLocation(*trackedPalm);
 		palm.locationFlags |= XR_SPACE_LOCATION_POSITION_TRACKED_BIT
 						  | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 	}
@@ -376,28 +360,16 @@ void OpenXRBody::updatePalmFallback(HandSide side, XrTime time,
 	}
 }
 
-void OpenXRBody::updateTrackerPalm(HandSide side, XrTime time,
+void OpenXRBody::updateTrackerPalm(HandSide side,
 	const HOL::HandPose& lastHandPose,
 	const std::optional<HOL::SteamVR::FallbackTrackerSource::TrackerPose>& trackerReference,
 	bool calibrate)
 {
-	auto& settings = HOL::Config.bodyTracking;
-	const auto& serial = settings.fallbackTrackerSerials[side];
-	auto& stored = mStoredPalmTransforms[side];
-	if (serial != mFallbackTrackerSerials[side] || !trackerReference)
-	{
-		// Lost or replaced trackers invalidate the live offset, but not a saved calibration.
-		stored = {};
-		mWasHandTrackingTracked[side] = false;
-		mHandTrackingAcquiredTime[side] = 0;
-		mFallbackTrackerSerials[side] = serial;
-	}
-	auto& palm = mJointLocations[side == HOL::LeftHand
-		? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB];
-	palm = {};
+	auto& settings = HOL::Config.handPose;
+	const auto& serial = settings.trackerSerials[side];
 	const auto& trackedPalm = lastHandPose.trackedPalmLocation;
 	const bool ready = !serial.empty() && trackerReference && trackedPalm;
-	HOL::display::BodyTracking.trackerCalibrationReady[side].store(ready);
+	HOL::display::HandTransform[side].trackerCalibrationReady.store(ready);
 	if (serial.empty() || !trackerReference)
 	{
 		return;
@@ -412,49 +384,23 @@ void OpenXRBody::updateTrackerPalm(HandSide side, XrTime time,
 			calibration.palmOffset.position, calibration.palmOffset.orientation);
 		calibration.palmOffset.orientation.normalize();
 	}
-	const bool calibrated = calibration.isForTracker(serial);
-	if (settings.alwaysUseTracker)
+	if (!calibration.isForTracker(serial))
 	{
-		// Manual calibration stays fixed until requested again, including across restarts.
-		mWasHandTrackingTracked[side] = false;
-		mHandTrackingAcquiredTime[side] = 0;
-		if (calibrated)
-		{
-			applyRelativeTransform(anchor, palm, calibration.palmOffset.position,
-				calibration.palmOffset.orientation.normalized());
-			palm.locationFlags
-				= XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
-		}
+		return;
 	}
-	else
-	{
-		// A saved calibration can restore fallback before the first tracked hand after a restart.
-		// Normal fallback still learns the latest live offset while actual hand tracking is present.
-		if (!stored.valid && calibrated)
-		{
-			stored.relativePos = calibration.palmOffset.position;
-			stored.relativeRot = calibration.palmOffset.orientation.normalized();
-			stored.valid = true;
-		}
-		if (trackedPalm)
-		{
-			palm = OpenXR::toXrBodyJointLocation(*trackedPalm);
-			updateTrackedPalmTransform(side, anchor, time);
-			return;
-		}
-		mWasHandTrackingTracked[side] = false;
-		mHandTrackingAcquiredTime[side] = 0;
-		preservePalmPose(side, anchor);
-	}
-	if (hasValidPose(palm))
-	{
-		HOL::PoseVelocity velocity = trackerReference->velocity;
-		// The palm moves around the tracker when it rotates, even if the tracker itself is still.
-		const Eigen::Vector3f offset
-			= OpenXR::toEigenVector(palm.pose.position) - trackerReference->location.position;
-		velocity.linearVelocity += velocity.angularVelocity.cross(offset);
-		mTrackerPalmVelocities[side] = velocity;
-	}
+	// Manual calibration stays fixed until requested again, including across restarts.
+	auto& palm = mCorrectedJointLocations[side == HOL::LeftHand
+		? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB];
+	applyRelativeTransform(anchor, palm, calibration.palmOffset.position,
+		calibration.palmOffset.orientation.normalized());
+	palm.locationFlags
+		= XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+	HOL::PoseVelocity velocity = trackerReference->velocity;
+	// The palm moves around the tracker when it rotates, even if the tracker itself is still.
+	const Eigen::Vector3f offset
+		= OpenXR::toEigenVector(palm.pose.position) - trackerReference->location.position;
+	velocity.linearVelocity += velocity.angularVelocity.cross(offset);
+	mTrackerPalmVelocities[side] = velocity;
 }
 
 void OpenXRBody::preservePalmPose(HandSide side, const XrBodyJointLocationFB& currentAnchor)

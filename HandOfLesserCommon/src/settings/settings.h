@@ -126,6 +126,20 @@ namespace HOL
 				= 26; // Minimum tracked joints to consider tracking valid
 		};
 
+		struct TrackerCalibration
+		{
+			// Bind the offset to a serial so choosing another tracker cannot reuse it by accident.
+			std::string serial;
+			HOL::PoseLocation palmOffset{Eigen::Vector3f::Zero(), Eigen::Quaternionf::Identity()};
+
+			bool isForTracker(const std::string& trackerSerial) const
+			{
+				return !serial.empty() && serial == trackerSerial && palmOffset.position.allFinite()
+					&& palmOffset.orientation.coeffs().allFinite()
+					&& palmOffset.orientation.squaredNorm() > 0.000001f;
+			}
+		};
+
 		struct HandPoseSettings
 		{
 			// NoControllerMode should always be the default so the driver does nothing
@@ -135,10 +149,18 @@ namespace HOL
 				= HOL::PossessionBehavior::PossessionBehavior_Full;
 			bool applyBaseOffset = true;
 			bool forceInactive = false;
+			std::array<bool, HOL::HandSide_MAX> useLighthouseTracker{};
+			std::array<std::string, HOL::HandSide_MAX> trackerSerials{};
+			std::array<TrackerCalibration, HOL::HandSide_MAX> trackerCalibrations{};
 			HOL::EmulatedControllerProfile emulatedControllerProfile
 				= HOL::EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch;
 			Eigen::Vector3f orientationOffset = Eigen::Vector3f(0, 0, 0);
 			Eigen::Vector3f positionOffset = Eigen::Vector3f(0, 0, 0);
+
+			bool usesLighthouseTrackers() const
+			{
+				return useLighthouseTracker[HOL::LeftHand] || useLighthouseTracker[HOL::RightHand];
+			}
 		};
 
 		struct VRChatSettings
@@ -418,29 +440,6 @@ namespace HOL
 			std::map<std::string, DeviceConfig> devices;
 		};
 
-		struct TrackerCalibration
-		{
-			// Bind the offset to a serial so choosing another tracker cannot reuse it by accident.
-			std::string serial;
-			HOL::PoseLocation palmOffset{Eigen::Vector3f::Zero(), Eigen::Quaternionf::Identity()};
-
-			bool isForTracker(const std::string& trackerSerial) const
-			{
-				return !serial.empty() && serial == trackerSerial && palmOffset.position.allFinite()
-					&& palmOffset.orientation.coeffs().allFinite()
-					&& palmOffset.orientation.squaredNorm() > 0.000001f;
-			}
-		};
-
-		struct BodyTrackingSettings
-		{
-			HOL::HandFallbackMode handFallbackMode = HOL::HandFallbackMode::BodyTracking;
-			// Retain tracker choices when another fallback mode is selected.
-			std::array<std::string, HOL::HandSide_MAX> fallbackTrackerSerials{};
-			bool alwaysUseTracker = false;
-			std::array<TrackerCalibration, HOL::HandSide_MAX> trackerCalibrations{};
-		};
-
 		struct TrackingFeaturesSettings
 		{
 			bool enableUpperBodyTracking = true;
@@ -465,7 +464,6 @@ namespace HOL
 			OpenXRSettings openxr;
 			SkeletalInput skeletal;
 			BodyTrackerSettings bodyTrackers;
-			BodyTrackingSettings bodyTracking;
 			DeviceSettings deviceSettings;
 			TrackingFeaturesSettings trackingFeatures;
 		};

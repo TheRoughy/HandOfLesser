@@ -15,8 +15,8 @@ namespace HOL
 		bool poseValid;
 		bool poseTracked;
 		bool poseStale;
-		// Direct, currently tracked palm before fallback and filtering. Calibration must never
-		// measure the tracker-driven output against itself, including while always-on is enabled.
+		// Direct, currently tracked palm before fallback and filtering. Calibration and synthetic
+		// body tracking must not feed the tracker-driven output back into their reference poses.
 		std::optional<HOL::PoseLocation> trackedPalmLocation;
 
 		// Raw palm-space values from the runtime.

@@ -331,15 +331,12 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 			this->handPose.trackedPalmLocation = trackedPalm;
 		}
 	}
-	const bool alwaysUseTracker = HOL::Config.bodyTracking.handFallbackMode
-		== HOL::HandFallbackMode::LighthouseTracker && HOL::Config.bodyTracking.alwaysUseTracker
-		&& !HOL::Config.bodyTracking.fallbackTrackerSerials[this->mSide].empty();
+	const bool usingTracker = bodyTracker.isUsingTracker(this->mSide);
 	bool usingBodyTrackingFallback = false;
 	XrBodyJointLocationFB* bodyPalmJoint = nullptr;
-	// Fallback mode only controls hand substitution; body data remains available to gestures and
-	// multimodal controller detection even when fallback is disabled.
-	if (bodyTracker.active
-		&& HOL::Config.bodyTracking.handFallbackMode != HOL::HandFallbackMode::None)
+	// Body fallback remains available whether or not trackers are configured. A calibrated
+	// tracker overlays its palm in the same buffer without changing the body-only fallback.
+	if (bodyTracker.active)
 	{
 		auto& candidate = bodyTracker.getLastJointLocations()[
 			this->mSide == HandSide::LeftHand ? XR_BODY_JOINT_LEFT_HAND_PALM_FB
@@ -354,7 +351,7 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 		}
 	}
 
-	if (bodyPalmJoint != nullptr && (!this->handPose.poseTracked || alwaysUseTracker))
+	if (bodyPalmJoint != nullptr && (!this->handPose.poseTracked || usingTracker))
 	{
 		// Keep live fingers when only the palm is tracker-driven. Lost hands retain their last
 		// finger pose through the same fallback path used for body tracking.
@@ -380,13 +377,6 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 		// A tracked tracker position does not make the hand or fingers tracked.
 		this->handPose.poseTracked = fingersTracked;
 		usingBodyTrackingFallback = true;
-	}
-	else if (alwaysUseTracker)
-	{
-		// Always-on requires a valid, calibrated tracker; do not silently return to hand poses.
-		this->handPose.active = false;
-		this->handPose.poseValid = false;
-		this->handPose.poseTracked = false;
 	}
 	
 
@@ -419,8 +409,7 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 							|| this->handPose.poseValid != prevPoseValid
 							|| this->handPose.poseTracked != prevPoseTracked;
 	this->handPose.poseStale = false;
-	const bool usingTrackerFallback = usingBodyTrackingFallback
-		&& HOL::Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker;
+	const bool usingTrackerPose = usingBodyTrackingFallback && usingTracker;
 
 	if (this->handPose.poseValid)
 	{
@@ -470,7 +459,7 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 			rawPalmVelocity.linearVelocity *= resumeBlendAlpha;
 			rawPalmVelocity.angularVelocity *= resumeBlendAlpha;
 		}
-		if (!usingTrackerFallback)
+		if (!usingTrackerPose)
 		{
 			// Tracker velocities describe a current-time pose and must retain normal prediction,
 			// even on runtimes whose pre-predicted hand poses require zero velocity multipliers.
@@ -502,7 +491,7 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 					newPalmOrientation.coeffs());
 			this->mPrevExternalUpdateGeneration = 0;
 		}
-		if (usingTrackerFallback)
+		if (usingTrackerPose)
 		{
 			// A changed velocity must reach SteamVR even if the pose is identical, particularly
 			// when motion stops and the previous velocity must no longer drive prediction.
@@ -528,10 +517,10 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 			// Trackers do not need visual-tracking smoothing. Keep trigger stabilization and filter
 			// history so pressing or releasing the trigger still stabilizes the same output pose.
 			filterParameters.positionSmoothingMS
-				= (usingTrackerFallback ? 0.0f : HOL::Config.steamvr.poseSmoothing.positionSmoothingMS)
+				= (usingTrackerPose ? 0.0f : HOL::Config.steamvr.poseSmoothing.positionSmoothingMS)
 				  + triggerStabilizationSmoothingMS;
 			filterParameters.rotationSmoothingMS
-				= (usingTrackerFallback ? 0.0f : HOL::Config.steamvr.poseSmoothing.rotationSmoothingMS)
+				= (usingTrackerPose ? 0.0f : HOL::Config.steamvr.poseSmoothing.rotationSmoothingMS)
 				  + triggerStabilizationSmoothingMS;
 			filterParameters.positionJitterRadiusMM
 				= HOL::Config.steamvr.poseSmoothing.positionJitterRadiusMM;

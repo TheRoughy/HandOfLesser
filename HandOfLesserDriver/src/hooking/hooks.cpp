@@ -265,7 +265,7 @@ namespace HOL::hooks
 					  == HOL::state::TrackingProvider::SteamVRDriver;
 				const bool forwardHmd = forwardedHmdPose
 					&& (forwardingSteamVRTracking
-						|| config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker);
+						|| config.handPose.usesLighthouseTrackers());
 				if ((forwardingSteamVRTracking && forwardedHandTrackingController)
 					|| forwardedHmdPose)
 				{

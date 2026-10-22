@@ -15,14 +15,14 @@ namespace HOL::OpenXR
 		void init();
 		// The native body tracker is optional when another provider supplies normalized samples.
 		void initOpenXR(xr::UniqueDynamicSession& session);
-		// Body acquisition follows the skeletal tick. Tracker fallback follows the main pose tick.
+		// Body acquisition follows the skeletal tick. Tracker palms follow the main pose tick.
 		void updateBody(XrSpace space,
 						XrTime time,
 						const HOL::PoseLocation* hmdPose,
 						const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
 						const HOL::BodyTrackingSample* externalSample = nullptr);
 		// The native SteamVR HMD aligns calibrated trackers even when hands use another provider.
-		void updateTrackers(XrTime time,
+		void updateTrackers(
 			const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
 			const HOL::PoseLocation* steamVRHmdPose);
 		OpenXRBody& getBodyTracker();

@@ -669,13 +669,13 @@ bool HandOfLesserCore::updateTracking(bool skeletalUpdate)
 			lastHandPoses,
 			bodySample);
 	}
-	// Fallback trackers can move between skeletal ticks, just like directly tracked palms.
+	// Trackers can move between skeletal ticks, just like directly tracked palms.
 	const auto steamVRHmdPose
-		= Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker
+		= Config.handPose.usesLighthouseTrackers()
 			  ? mHandTracking.getSteamVRTrackingSource().getHmdPose()
 			  : std::nullopt;
 	this->mBodyTracking.updateTrackers(
-		time, lastHandPoses, steamVRHmdPose ? &*steamVRHmdPose : nullptr);
+		lastHandPoses, steamVRHmdPose ? &*steamVRHmdPose : nullptr);
 	this->mHandTracking.updateHands(
 		space,
 		time,
@@ -901,9 +901,9 @@ void HOL::HandOfLesserCore::syncState()
 	this->mDriverTransport.sendPayload<NativePacketType::State>(payload);
 }
 
-void HOL::HandOfLesserCore::calibrateTrackers()
+void HOL::HandOfLesserCore::calibrateTracker(HOL::HandSide side)
 {
-	mBodyTracking.getBodyTracker().calibrateTrackers();
+	mBodyTracking.getBodyTracker().calibrateTracker(side);
 }
 
 void HOL::HandOfLesserCore::saveSettings()

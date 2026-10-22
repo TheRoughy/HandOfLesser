@@ -28,14 +28,14 @@ void HOL::OpenXR::BodyTracking::updateBody(XrSpace space,
 	this->mBodyTracker.updateJointLocations(space, time, hmdPose, lastHandPoses, externalSample);
 }
 
-void HOL::OpenXR::BodyTracking::updateTrackers(XrTime time,
+void HOL::OpenXR::BodyTracking::updateTrackers(
 	const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
 	const HOL::PoseLocation* steamVRHmdPose)
 {
 	HOL::SteamVR::FallbackTrackerSource::TrackerPoses trackerReferences{};
-	if (Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker)
+	if (Config.handPose.usesLighthouseTrackers())
 	{
-		trackerReferences = mTrackerSource.update(Config.bodyTracking.fallbackTrackerSerials,
+		trackerReferences = mTrackerSource.update(Config.handPose.trackerSerials,
 			steamVRHmdPose);
 	}
 	else
@@ -44,9 +44,13 @@ void HOL::OpenXR::BodyTracking::updateTrackers(XrTime time,
 	}
 	for (int side = 0; side < HOL::HandSide_MAX; side++)
 	{
-		HOL::display::BodyTracking.fallbackTrackerValid[side].store(trackerReferences[side].has_value());
+		if (!Config.handPose.useLighthouseTracker[side])
+		{
+			trackerReferences[side].reset();
+		}
+		HOL::display::HandTransform[side].trackerValid.store(trackerReferences[side].has_value());
 	}
-	this->mBodyTracker.updateTrackerFallback(time, lastHandPoses, trackerReferences);
+	this->mBodyTracker.updateTrackerPalms(lastHandPoses, trackerReferences);
 }
 
 OpenXRBody& HOL::OpenXR::BodyTracking::getBodyTracker()
@@ -89,9 +93,7 @@ HOL::MultimodalPosePayload HOL::OpenXR::BodyTracking::getMultimodalPosePayload()
 	Eigen::Vector3f controllerTranslationOffset = controllerOffset.position;
 
 	// Left hand palm
-	const auto& leftPalm = Config.bodyTracking.handFallbackMode != HOL::HandFallbackMode::LighthouseTracker
-		? bodyJoints[XR_BODY_JOINT_LEFT_HAND_PALM_FB]
-		: mBodyTracker.getRuntimePalmJoint(HOL::LeftHand);
+	const auto& leftPalm = mBodyTracker.getBodyPalmJoint(HOL::LeftHand);
 	{
 		Eigen::Vector3f position = OpenXR::toEigenVector(leftPalm.pose.position);
 		Eigen::Quaternionf rotation = OpenXR::toEigenQuaternion(leftPalm.pose.orientation);
@@ -110,9 +112,7 @@ HOL::MultimodalPosePayload HOL::OpenXR::BodyTracking::getMultimodalPosePayload()
 	controllerTranslationOffset = flipHandTranslation(controllerTranslationOffset);
 
 	// Right hand palm
-	const auto& rightPalm = Config.bodyTracking.handFallbackMode != HOL::HandFallbackMode::LighthouseTracker
-		? bodyJoints[XR_BODY_JOINT_RIGHT_HAND_PALM_FB]
-		: mBodyTracker.getRuntimePalmJoint(HOL::RightHand);
+	const auto& rightPalm = mBodyTracker.getBodyPalmJoint(HOL::RightHand);
 	{
 		Eigen::Vector3f position = OpenXR::toEigenVector(rightPalm.pose.position);
 		Eigen::Quaternionf rotation = OpenXR::toEigenQuaternion(rightPalm.pose.orientation);

@@ -81,6 +81,7 @@ namespace HOL
 
 		void buildMain();
 		void buildTracking();
+		void buildHandTrackers();
 		void buildBodyTracking();
 		void buildSteamVR();
 		void buildVRChatOSCSettings();

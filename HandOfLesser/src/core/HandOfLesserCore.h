@@ -41,7 +41,7 @@ namespace HOL
 		void saveSettings();
 		void loadSettings();
 		void rebuildActions();
-		void calibrateTrackers();
+		void calibrateTracker(HOL::HandSide side);
 		std::shared_ptr<BaseAction> getActionForBindingIndex(size_t bindingIndex) const;
 		bool isDriverConnected() const;
 

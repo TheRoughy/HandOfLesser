@@ -337,7 +337,7 @@ float UserInterface::scaleSize(float size)
 
 void UserInterface::buildSingleHandTransformDisplay(HOL::HandSide side)
 {
-	const char* sideName = (side == HOL::LeftHand ? "Left" : "Right");
+	const char* sideName = (side == HOL::LeftHand ? "Left hand" : "Right hand");
 	const char* windowName = (side == HOL::LeftHand ? "LeftChild" : "RightRight");
 	int width = (side == HOL::LeftHand ? ImGui::GetContentRegionAvail().x * 0.5f : 0);
 
@@ -1338,6 +1338,19 @@ void HOL::UserInterface::buildMisc()
 
 		ImGui::EndPopup();
 	}
+
+	ImGui::BeginDisabled(!HOL::state::Runtime.isOVR);
+	if (ImGui::Checkbox("Request upper body tracking", &Config.trackingFeatures.enableUpperBodyTracking))
+	{
+		HOL::HandOfLesserCore::Current->featuresManager.applyTrackingFeatures(
+			Config.trackingFeatures.enableUpperBodyTracking,
+			Config.trackingFeatures.enableSimultaneousTracking);
+	}
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+	{
+		showWrappedTooltip("Upper body tracking can only be configured with the Oculus runtime.");
+	}
+	ImGui::EndDisabled();
 
 	if (ImGui::Button("Request High Fidelity"))
 	{
@@ -2703,6 +2716,7 @@ void HOL::UserInterface::buildTracking()
 		HOL::HandOfLesserCore::Current->syncSettings();
 	}
 
+	buildHandTrackers();
 	buildSingleHandTransformDisplay(HOL::LeftHand);
 	ImGui::SameLine();
 	buildSingleHandTransformDisplay(HOL::RightHand);
@@ -2747,57 +2761,36 @@ void HOL::UserInterface::buildBodyTracking()
 		}
 	}
 
-	ImGui::SeparatorText("Tracking features");
-	ImGui::BeginDisabled(!HOL::state::Runtime.isOVR);
-	if (ImGui::Checkbox("Request upper body tracking", &Config.trackingFeatures.enableUpperBodyTracking))
-	{
-		HOL::HandOfLesserCore::Current->featuresManager.applyTrackingFeatures(
-			Config.trackingFeatures.enableUpperBodyTracking,
-			Config.trackingFeatures.enableSimultaneousTracking);
-	}
-	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-	{
-		showWrappedTooltip("Upper body tracking can only be configured with the Oculus runtime.");
-	}
-	ImGui::EndDisabled();
+	ImGui::EndChild();
+	buildBodyTrackers();
+}
 
-	ImGui::SeparatorText("Hand fallback");
-	int fallbackMode = static_cast<int>(Config.bodyTracking.handFallbackMode);
-	bool fallbackChanged = ImGui::RadioButton("None", &fallbackMode,
-		static_cast<int>(HOL::HandFallbackMode::None));
-	fallbackChanged |= ImGui::RadioButton("Body tracking", &fallbackMode,
-		static_cast<int>(HOL::HandFallbackMode::BodyTracking));
-	fallbackChanged |= ImGui::RadioButton("Lighthouse tracker", &fallbackMode,
-		static_cast<int>(HOL::HandFallbackMode::LighthouseTracker));
-	if (fallbackChanged)
-	{
-		Config.bodyTracking.handFallbackMode = static_cast<HOL::HandFallbackMode>(fallbackMode);
-		HOL::HandOfLesserCore::Current->syncSettings();
-	}
-	ImGui::TextWrapped("Body tracking anchors hands to the arms when upper body tracking is available, "
-		"or to the torso otherwise. Lighthouse tracker uses the selected trackers instead. "
-		"None disables hand fallback without disabling body tracking for other features.");
-
-	const bool useTrackers = Config.bodyTracking.handFallbackMode
-		== HOL::HandFallbackMode::LighthouseTracker;
-	ImGui::BeginDisabled(!useTrackers);
-	if (ImGui::Checkbox("Always use tracker", &Config.bodyTracking.alwaysUseTracker))
-	{
-		HOL::HandOfLesserCore::Current->syncSettings();
-	}
-	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-	{
-		showWrappedTooltip("Use the calibrated tracker position and rotation even while hand tracking "
-			"is available. Fingers still follow hand tracking. Requires calibration and a valid tracker; "
-			"otherwise that hand's output is unavailable.");
-	}
-	bool calibrationReady = false;
+void HOL::UserInterface::buildHandTrackers()
+{
 	for (int side = 0; side < HOL::HandSide_MAX; side++)
 	{
+		if (side == HOL::RightHand)
+		{
+			ImGui::SameLine();
+		}
 		ImGui::PushID(side);
-		auto& serial = Config.bodyTracking.fallbackTrackerSerials[side];
-		const char* label = side == HOL::LeftHand ? "Left hand" : "Right hand";
-		if (ImGui::BeginCombo(label, serial.empty() ? "Select tracker" : serial.c_str()))
+		const float width = side == HOL::LeftHand ? ImGui::GetContentRegionAvail().x * 0.5f : 0;
+		ImGui::BeginChild("HandTracker", ImVec2(width, 0), ImGuiChildFlags_AutoResizeY);
+		ImGui::SeparatorText(side == HOL::LeftHand ? "Left tracker" : "Right tracker");
+		if (ImGui::Checkbox("Use Lighthouse tracker", &Config.handPose.useLighthouseTracker[side]))
+		{
+			HOL::HandOfLesserCore::Current->syncSettings();
+		}
+		if (ImGui::IsItemHovered())
+		{
+			showWrappedTooltip("Use a calibrated Lighthouse tracker for this hand's position and "
+				"rotation. Fingers and gestures still use hand tracking. If the tracker is "
+				"unavailable or not calibrated, normal hand tracking and body fallback remain available.");
+		}
+		ImGui::BeginDisabled(!Config.handPose.useLighthouseTracker[side]);
+		auto& serial = Config.handPose.trackerSerials[side];
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::BeginCombo("##Tracker", serial.empty() ? "Select tracker" : serial.c_str()))
 		{
 			if (ImGui::Selectable("None", serial.empty()))
 			{
@@ -2820,38 +2813,41 @@ void HOL::UserInterface::buildBodyTracking()
 		}
 		if (ImGui::IsItemHovered())
 		{
-			showWrappedTooltip("A selected tracker replaces body tracking as this hand's fallback reference. "
-				"Position and rotation relative to the tracker are recorded while the hand is tracked. "
+			showWrappedTooltip("A calibrated tracker supplies this hand's position and rotation. "
+				"Select None to use normal hand tracking and body fallback for this hand. "
 				"Tracker poses include SteamVR calibration, such as OpenVR Space Calibrator. "
 				"The tracker must be calibrated to the headset's play space.");
 		}
-		if (useTrackers && !serial.empty())
+		if (!serial.empty())
 		{
-			ImGui::TextDisabled(HOL::display::BodyTracking.fallbackTrackerValid[side].load()
+			ImGui::TextDisabled(HOL::display::HandTransform[side].trackerValid.load()
 				? "Tracker reference valid" : "Tracker reference unavailable");
-			ImGui::TextDisabled(Config.bodyTracking.trackerCalibrations[side].isForTracker(serial)
+			ImGui::TextDisabled(Config.handPose.trackerCalibrations[side].isForTracker(serial)
 				? "Calibration saved" : "No saved calibration");
-			calibrationReady |= HOL::display::BodyTracking.trackerCalibrationReady[side].load();
 		}
+		else
+		{
+			ImGui::TextDisabled("No tracker selected");
+			ImGui::TextDisabled("No saved calibration");
+		}
+		const bool calibrationReady = !serial.empty()
+			&& HOL::display::HandTransform[side].trackerCalibrationReady.load();
+		ImGui::BeginDisabled(!calibrationReady);
+		if (ImGui::Button("Calibrate"))
+		{
+			HOL::HandOfLesserCore::Current->calibrateTracker(static_cast<HOL::HandSide>(side));
+		}
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		{
+			showWrappedTooltip("Capture this hand's position and rotation relative to its selected "
+				"tracker. Requires valid hand tracking and a valid tracker pose. "
+				"The offset remains fixed until calibrated again and is saved across restarts.");
+		}
+		ImGui::EndDisabled();
+		ImGui::EndDisabled();
+		ImGui::EndChild();
 		ImGui::PopID();
 	}
-	ImGui::BeginDisabled(!calibrationReady);
-	if (ImGui::Button("Calibration"))
-	{
-		HOL::HandOfLesserCore::Current->calibrateTrackers();
-	}
-	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-	{
-		showWrappedTooltip("Capture the current hand position and rotation relative to each selected "
-			"tracker. Only hands with valid hand tracking and tracker poses are calibrated. "
-			"Always use tracker keeps this offset fixed until calibrated again. "
-			"Calibration is saved with the settings and reused after restarts.");
-	}
-	ImGui::EndDisabled();
-	ImGui::EndDisabled();
-	ImGui::EndChild();
-
-	buildBodyTrackers();
 }
 
 void UserInterface::buildVRChatOSCSettings()
