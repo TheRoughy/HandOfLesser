@@ -108,7 +108,8 @@ namespace HOL
 				 {"positionOffset", settings.positionOffset},
 				 {"useLighthouseTracker", settings.useLighthouseTracker},
 				 {"trackerSerials", settings.trackerSerials},
-				 {"trackerCalibrations", settings.trackerCalibrations}};
+				 {"trackerCalibrations", settings.trackerCalibrations},
+				 {"maximumTrackerDistanceMM", settings.maximumTrackerDistanceMM}};
 		}
 
 		inline void from_json(const nlohmann::json& j, HandPoseSettings& settings)
@@ -124,6 +125,7 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "useLighthouseTracker", settings.useLighthouseTracker);
 			nlohmann::get_to_if_present(j, "trackerSerials", settings.trackerSerials);
 			nlohmann::get_to_if_present(j, "trackerCalibrations", settings.trackerCalibrations);
+			nlohmann::get_to_if_present(j, "maximumTrackerDistanceMM", settings.maximumTrackerDistanceMM);
 		}
 
 		inline void to_json(nlohmann::json& j, const VRChatSettings& settings)

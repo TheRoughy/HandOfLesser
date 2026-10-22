@@ -28,6 +28,8 @@ namespace HOL
 	{
 		std::atomic<bool> trackerValid = false;
 		std::atomic<bool> trackerCalibrationReady = false;
+		std::atomic<bool> trackerRejected = false;
+		std::atomic<float> trackerAverageDistanceMM = -1.0f;
 		bool active;
 		bool positionValid;
 		bool positionTracked;

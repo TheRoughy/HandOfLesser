@@ -9,6 +9,7 @@
 #include <HandOfLesserCommon.h>
 #include "src/hand/body_tracking_sample.h"
 #include "src/hands/hand_pose.h"
+#include "src/hands/tracker_distance_check.h"
 #include "src/steamvr/fallback_tracker_source.h"
 
 using namespace HOL;
@@ -72,7 +73,7 @@ private:
 		bool usingSyntheticBody);
 	void updateTrackerPalm(HandSide side, const HOL::HandPose& lastHandPose,
 		const std::optional<HOL::SteamVR::FallbackTrackerSource::TrackerPose>& trackerReference,
-		bool calibrate);
+		bool calibrate, HOL::TrackerDistanceCheck::Clock::time_point now);
 	bool canUseArmTrackingAnchor() const;
 	void reconstructPalmJoint(HandSide side);
 	void updateTrackedPalmTransform(HandSide side, const XrBodyJointLocationFB& anchor, XrTime time);
@@ -87,6 +88,7 @@ private:
 	// Presence also identifies which hands currently use the calibrated tracker overlay.
 	std::array<std::optional<HOL::PoseVelocity>, HOL::HandSide_MAX> mTrackerPalmVelocities{};
 	std::array<std::atomic<bool>, HOL::HandSide_MAX> mTrackerCalibrationRequested{};
+	std::array<HOL::TrackerDistanceCheck, HOL::HandSide_MAX> mTrackerDistanceChecks;
 	XrTime mHandTrackingAcquiredTime[2]{};
 	bool mWasHandTrackingTracked[2]{};
 

@@ -2820,15 +2820,48 @@ void HOL::UserInterface::buildHandTrackers()
 		}
 		if (!serial.empty())
 		{
-			ImGui::TextDisabled(HOL::display::HandTransform[side].trackerValid.load()
-				? "Tracker reference valid" : "Tracker reference unavailable");
-			ImGui::TextDisabled(Config.handPose.trackerCalibrations[side].isForTracker(serial)
-				? "Calibration saved" : "No saved calibration");
+			if (!HOL::display::HandTransform[side].trackerValid.load())
+			{
+				ImGui::TextDisabled("Tracker reference unavailable");
+			}
+			else if (HOL::display::HandTransform[side].trackerRejected.load())
+			{
+				ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "Tracker rejected: hand distance");
+			}
+			else
+			{
+				ImGui::TextDisabled("Tracker reference valid");
+			}
 		}
 		else
 		{
 			ImGui::TextDisabled("No tracker selected");
-			ImGui::TextDisabled("No saved calibration");
+		}
+		ImGui::TextUnformatted("Maximum distance (mm)");
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::InputFloat("##MaximumTrackerDistance",
+				&Config.handPose.maximumTrackerDistanceMM[side], 10.0f, 100.0f, "%.0f"))
+		{
+			Config.handPose.maximumTrackerDistanceMM[side]
+				= std::max(0.0f, Config.handPose.maximumTrackerDistanceMM[side]);
+			HOL::HandOfLesserCore::Current->syncSettings();
+		}
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		{
+			showWrappedTooltip("Reject this tracker's pose when its average distance from the tracked "
+				"hand exceeds this limit. The average covers five seconds of valid comparisons; "
+				"missing hand tracking pauses the check. Normal hand tracking and body fallback are "
+				"used while rejected. Tracker use resumes below 80% of the limit. "
+				"Recalibrating or selecting another tracker clears the comparison history.");
+		}
+		const float averageDistanceMM = HOL::display::HandTransform[side].trackerAverageDistanceMM.load();
+		if (averageDistanceMM >= 0.0f)
+		{
+			ImGui::TextDisabled("Average hand distance: %.0f mm", averageDistanceMM);
+		}
+		else
+		{
+			ImGui::TextDisabled("Average hand distance: unavailable");
 		}
 		const bool calibrationReady = !serial.empty()
 			&& HOL::display::HandTransform[side].trackerCalibrationReady.load();
@@ -2844,6 +2877,10 @@ void HOL::UserInterface::buildHandTrackers()
 				"The offset remains fixed until calibrated again and is saved across restarts.");
 		}
 		ImGui::EndDisabled();
+		ImGui::SameLine();
+		ImGui::TextDisabled(!serial.empty()
+			&& Config.handPose.trackerCalibrations[side].isForTracker(serial)
+			? "Calibration saved" : "No saved calibration");
 		ImGui::EndDisabled();
 		ImGui::EndChild();
 		ImGui::PopID();

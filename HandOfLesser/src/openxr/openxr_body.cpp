@@ -221,9 +221,12 @@ void OpenXRBody::updateTrackerPalms(
 {
 	mTrackerPalmVelocities = {};
 	active = mBodyActive;
+	const auto now = HOL::TrackerDistanceCheck::Clock::now();
 	for (int side = 0; side < HOL::HandSide_MAX; side++)
 	{
 		const bool calibrate = mTrackerCalibrationRequested[side].exchange(false);
+		auto& distanceCheck = mTrackerDistanceChecks[side];
+		distanceCheck.setTracker(HOL::Config.handPose.trackerSerials[side]);
 		const auto joint = side == HOL::LeftHand
 			? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB;
 		// Keep normal body fallback underneath the tracker overlay. Missing, uncalibrated, or
@@ -232,13 +235,17 @@ void OpenXRBody::updateTrackerPalms(
 		if (HOL::Config.handPose.useLighthouseTracker[side])
 		{
 			updateTrackerPalm(static_cast<HandSide>(side), *lastHandPoses[side],
-				trackerReferences[side], calibrate);
+				trackerReferences[side], calibrate, now);
 			active |= isUsingTracker(static_cast<HandSide>(side));
 		}
 		else
 		{
+			distanceCheck.pause();
 			HOL::display::HandTransform[side].trackerCalibrationReady.store(false);
 		}
+		HOL::display::HandTransform[side].trackerRejected.store(distanceCheck.isRejected());
+		HOL::display::HandTransform[side].trackerAverageDistanceMM.store(
+			distanceCheck.getAverageDistanceMM().value_or(-1.0f));
 	}
 }
 
@@ -363,15 +370,17 @@ void OpenXRBody::updatePalmFallback(HandSide side, XrTime time,
 void OpenXRBody::updateTrackerPalm(HandSide side,
 	const HOL::HandPose& lastHandPose,
 	const std::optional<HOL::SteamVR::FallbackTrackerSource::TrackerPose>& trackerReference,
-	bool calibrate)
+	bool calibrate, HOL::TrackerDistanceCheck::Clock::time_point now)
 {
 	auto& settings = HOL::Config.handPose;
 	const auto& serial = settings.trackerSerials[side];
 	const auto& trackedPalm = lastHandPose.trackedPalmLocation;
 	const bool ready = !serial.empty() && trackerReference && trackedPalm;
+	auto& distanceCheck = mTrackerDistanceChecks[side];
 	HOL::display::HandTransform[side].trackerCalibrationReady.store(ready);
 	if (serial.empty() || !trackerReference)
 	{
+		distanceCheck.pause();
 		return;
 	}
 	const auto anchor = OpenXR::toXrBodyJointLocation(trackerReference->location);
@@ -383,22 +392,41 @@ void OpenXRBody::updateTrackerPalm(HandSide side,
 		calculateRelativeTransform(anchor, OpenXR::toXrBodyJointLocation(*trackedPalm),
 			calibration.palmOffset.position, calibration.palmOffset.orientation);
 		calibration.palmOffset.orientation.normalize();
+		distanceCheck.reset();
 	}
 	if (!calibration.isForTracker(serial))
 	{
+		distanceCheck.pause();
 		return;
 	}
 	// Manual calibration stays fixed until requested again, including across restarts.
-	auto& palm = mCorrectedJointLocations[side == HOL::LeftHand
-		? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB];
+	XrBodyJointLocationFB palm{};
 	applyRelativeTransform(anchor, palm, calibration.palmOffset.position,
 		calibration.palmOffset.orientation.normalized());
 	palm.locationFlags
 		= XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+	const Eigen::Vector3f palmPosition = OpenXR::toEigenVector(palm.pose.position);
+	if (trackedPalm)
+	{
+		// Compare corresponding palms, not the physical tracker mounting position or the
+		// filtered output. Only actual hand tracking can validate the calibrated tracker pose.
+		const float distanceMeters = (palmPosition - trackedPalm->position).stableNorm();
+		distanceCheck.update(distanceMeters, settings.maximumTrackerDistanceMM[side], now);
+	}
+	else
+	{
+		distanceCheck.pause();
+	}
+	if (distanceCheck.isRejected())
+	{
+		// Leave the body-only palm in place so the normal hand/body fallback path remains active.
+		return;
+	}
+	mCorrectedJointLocations[side == HOL::LeftHand
+		? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB] = palm;
 	HOL::PoseVelocity velocity = trackerReference->velocity;
 	// The palm moves around the tracker when it rotates, even if the tracker itself is still.
-	const Eigen::Vector3f offset
-		= OpenXR::toEigenVector(palm.pose.position) - trackerReference->location.position;
+	const Eigen::Vector3f offset = palmPosition - trackerReference->location.position;
 	velocity.linearVelocity += velocity.angularVelocity.cross(offset);
 	mTrackerPalmVelocities[side] = velocity;
 }

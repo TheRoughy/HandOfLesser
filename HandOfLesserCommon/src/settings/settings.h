@@ -152,6 +152,7 @@ namespace HOL
 			std::array<bool, HOL::HandSide_MAX> useLighthouseTracker{};
 			std::array<std::string, HOL::HandSide_MAX> trackerSerials{};
 			std::array<TrackerCalibration, HOL::HandSide_MAX> trackerCalibrations{};
+			std::array<float, HOL::HandSide_MAX> maximumTrackerDistanceMM{500.0f, 500.0f};
 			HOL::EmulatedControllerProfile emulatedControllerProfile
 				= HOL::EmulatedControllerProfile::EmulatedControllerProfile_SteamLinkHandTouch;
 			Eigen::Vector3f orientationOffset = Eigen::Vector3f(0, 0, 0);
