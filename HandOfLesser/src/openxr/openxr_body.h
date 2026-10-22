@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <atomic>
+#include <optional>
 #include <d3d11.h> // Why do you need this??
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr.hpp>
@@ -13,6 +15,8 @@ using namespace HOL;
 class OpenXRBody
 {
 public:
+	// The UI requests calibration; the tracking thread captures matching hand/tracker samples.
+	void calibrateTrackers();
 	~OpenXRBody();
 	void initOpenXR(xr::UniqueDynamicSession& session);
 	void updateJointLocations(XrSpace space,
@@ -20,10 +24,13 @@ public:
 								  const HOL::PoseLocation* hmdPose,
 								  const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
 									  lastHandPoses,
-								  const HOL::BodyTrackingSample* externalSample = nullptr);
+								  const HOL::BodyTrackingSample* externalSample,
+								  const std::array<std::optional<HOL::PoseLocation>, HOL::HandSide_MAX>&
+									  trackerReferences);
 
 	XrBodyJointLocationFB* getLastJointLocations();
 	const XrBodyJointLocationFB* getLastJointLocations() const;
+	const XrBodyJointLocationFB& getRuntimePalmJoint(HOL::HandSide side) const;
 	bool isAvailable() const;
 	XrBodyTrackerFB getBodyTrackerFB();
 	bool getHeadPose(HOL::PoseLocation& pose) const;
@@ -53,10 +60,15 @@ private:
 								const Eigen::Vector3f& relativePos,
 								const Eigen::Quaternionf& relativeRot);
 
-	void preservePalmPose(HandSide side);
+	void preservePalmPose(HandSide side, const XrBodyJointLocationFB& anchor);
+	void updatePalmFallback(HandSide side, XrTime time, const HOL::HandPose& lastHandPose,
+		bool usingSyntheticBody, const std::optional<HOL::PoseLocation>& trackerReference,
+		bool calibrateTrackers);
+	void updateTrackerPalm(HandSide side, XrTime time, const HOL::HandPose& lastHandPose,
+		const std::optional<HOL::PoseLocation>& trackerReference, bool calibrate);
 	bool canUseArmTrackingAnchor() const;
 	void reconstructPalmJoint(HandSide side);
-	void updateTrackedPalmTransform(HandSide side, XrBodyJointFB anchorJoint, XrTime time);
+	void updateTrackedPalmTransform(HandSide side, const XrBodyJointLocationFB& anchor, XrTime time);
 	void setFallbackJointLocations(
 		const HOL::PoseLocation* hmdPose,
 		const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses);
@@ -65,14 +77,20 @@ private:
 												 const Eigen::Vector3f& nextJointPos,
 												 const Eigen::Quaternionf& bogusOrientation);
 	StoredPalmTransform mStoredPalmTransforms[2]{};
+	std::array<std::string, HOL::HandSide_MAX> mFallbackTrackerSerials{};
+	std::atomic<bool> mTrackerCalibrationRequested = false;
 	XrTime mHandTrackingAcquiredTime[2]{};
 	bool mWasHandTrackingTracked[2]{};
 
 	XrBodyTrackerFB mBodyTracker = nullptr;
 	// External body samples count as available even though no native tracker handle exists.
 	bool mUsingExternalBody = false;
+	bool mUsingSyntheticBody = true;
+	HOL::HandFallbackMode mFallbackMode = HOL::HandFallbackMode::BodyTracking;
 	XrPath mInputSourcePath;
 	XrBodyJointLocationFB mJointLocations[XR_BODY_JOINT_COUNT_FB]{};
 	XrBodyJointLocationFB mPreviousJointLocations[XR_BODY_JOINT_COUNT_FB]{};
 	XrBodyJointLocationFB mCorrectedJointLocations[XR_BODY_JOINT_COUNT_FB]{};
+	// Controller-held detection must use real body palms, not palms attached to fallback trackers.
+	XrBodyJointLocationFB mRuntimePalmJoints[HOL::HandSide_MAX]{};
 };

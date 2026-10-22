@@ -3,6 +3,7 @@
 #include <HandOfLesserCommon.h>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <optional>
 namespace HOL
 {
 	class HandPose
@@ -14,6 +15,9 @@ namespace HOL
 		bool poseValid;
 		bool poseTracked;
 		bool poseStale;
+		// Direct, currently tracked palm before fallback and filtering. Calibration must never
+		// measure the tracker-driven output against itself, including while always-on is enabled.
+		std::optional<HOL::PoseLocation> trackedPalmLocation;
 
 		// Raw palm-space values from the runtime.
 		// These are used for SteamVR controller pose generation so the driver can apply the

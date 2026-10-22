@@ -17,6 +17,8 @@ namespace HOL::SteamVR
 		void updateBaseline(const HOL::SteamVRHandBaselinePayload& payload);
 		void updatePose(const HOL::SteamVRHandPosePayload& payload);
 		void updateHmdPose(const HOL::SteamVRHmdPosePayload& payload);
+		// Available independently of the selected hand provider, including for tracker alignment.
+		std::optional<HOL::PoseLocation> getHmdPose() const;
 		HOL::TrackingSourceFrame update(bool skeletalUpdate, bool applyBaseOffset) override;
 		void applySourcePose(HOL::HandSide side, HOL::HandTransformPayload& payload) const override;
 		bool hasTrackingReference() const override;

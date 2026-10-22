@@ -54,6 +54,7 @@
 	src/hands/input/osc_alternate_float_input.cpp
 	src/steamvr/steamvr_input.cpp
 	src/steamvr/steamvr_setup.cpp
+	src/steamvr/fallback_tracker_source.cpp
 	src/hands/input/steamvr_float_input.cpp
 	src/hands/input/steamvr_bool_input.cpp
 	src/steamvr/skeletal_input.cpp

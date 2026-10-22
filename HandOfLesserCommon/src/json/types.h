@@ -6,6 +6,8 @@
 
 namespace HOL
 {
+	NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(PoseLocation, position, orientation)
+
 	inline void to_json(nlohmann::json& j, const MotionRange& range)
 	{
 		j = nlohmann::json{{"start", range.start}, {"end", range.end}};
@@ -454,6 +456,33 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "devices", settings.devices);
 		}
 
+		inline void to_json(nlohmann::json& j, const TrackerCalibration& settings)
+		{
+			j = {{"serial", settings.serial}, {"palmOffset", settings.palmOffset}};
+		}
+
+		inline void from_json(const nlohmann::json& j, TrackerCalibration& settings)
+		{
+			nlohmann::get_to_if_present(j, "serial", settings.serial);
+			nlohmann::get_to_if_present(j, "palmOffset", settings.palmOffset);
+		}
+
+		inline void to_json(nlohmann::json& j, const BodyTrackingSettings& settings)
+		{
+			j = {{"handFallbackMode", settings.handFallbackMode},
+				 {"fallbackTrackerSerials", settings.fallbackTrackerSerials},
+				 {"alwaysUseTracker", settings.alwaysUseTracker},
+				 {"trackerCalibrations", settings.trackerCalibrations}};
+		}
+
+		inline void from_json(const nlohmann::json& j, BodyTrackingSettings& settings)
+		{
+			nlohmann::get_to_if_present(j, "handFallbackMode", settings.handFallbackMode);
+			nlohmann::get_to_if_present(j, "fallbackTrackerSerials", settings.fallbackTrackerSerials);
+			nlohmann::get_to_if_present(j, "alwaysUseTracker", settings.alwaysUseTracker);
+			nlohmann::get_to_if_present(j, "trackerCalibrations", settings.trackerCalibrations);
+		}
+
 		inline void to_json(nlohmann::json& j, const TrackingFeaturesSettings& settings)
 		{
 			j = {{"enableUpperBodyTracking", settings.enableUpperBodyTracking},
@@ -486,6 +515,7 @@ namespace HOL
 				 {"input", settings.input},
 				 {"skeletal", settings.skeletal},
 				 {"bodyTrackers", settings.bodyTrackers},
+				 {"bodyTracking", settings.bodyTracking},
 				 {"deviceSettings", settings.deviceSettings},
 				 {"trackingFeatures", settings.trackingFeatures}};
 		}
@@ -505,6 +535,7 @@ namespace HOL
 			nlohmann::get_to_if_present(j, "input", settings.input);
 			nlohmann::get_to_if_present(j, "skeletal", settings.skeletal);
 			nlohmann::get_to_if_present(j, "bodyTrackers", settings.bodyTrackers);
+			nlohmann::get_to_if_present(j, "bodyTracking", settings.bodyTracking);
 			nlohmann::get_to_if_present(j, "deviceSettings", settings.deviceSettings);
 			nlohmann::get_to_if_present(j, "trackingFeatures", settings.trackingFeatures);
 		}

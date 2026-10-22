@@ -658,6 +658,11 @@ bool HandOfLesserCore::updateTracking(bool skeletalUpdate)
 
 	if (skeletalUpdate)
 	{
+		// Tracker alignment uses the native HMD even when hands come from another provider.
+		const auto steamVRHmdPose
+			= Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker
+				  ? mHandTracking.getSteamVRTrackingSource().getHmdPose()
+				  : std::nullopt;
 		const std::array<const HOL::HandPose*, HOL::HandSide_MAX> lastHandPoses = {
 			&this->mHandTracking.getHandPose(HOL::HandSide::LeftHand),
 			&this->mHandTracking.getHandPose(HOL::HandSide::RightHand),
@@ -667,7 +672,8 @@ bool HandOfLesserCore::updateTracking(bool skeletalUpdate)
 			time,
 			hmdPose ? &*hmdPose : nullptr,
 			lastHandPoses,
-			bodySample);
+			bodySample,
+			steamVRHmdPose ? &*steamVRHmdPose : nullptr);
 	}
 	this->mHandTracking.updateHands(
 		space,
@@ -892,6 +898,11 @@ void HOL::HandOfLesserCore::syncState()
 	payload.tracking = state::Tracking;
 	payload.runtime = state::Runtime;
 	this->mDriverTransport.sendPayload<NativePacketType::State>(payload);
+}
+
+void HOL::HandOfLesserCore::calibrateTrackers()
+{
+	mBodyTracking.getBodyTracker().calibrateTrackers();
 }
 
 void HOL::HandOfLesserCore::saveSettings()

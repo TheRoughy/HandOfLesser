@@ -86,6 +86,13 @@ namespace HOL
 		PossessionBehavior_MAX
 	};
 
+	enum class HandFallbackMode
+	{
+		None,
+		BodyTracking,
+		LighthouseTracker,
+	};
+
 	enum class BodyTrackerRole : int
 	{
 		Hips = 0,

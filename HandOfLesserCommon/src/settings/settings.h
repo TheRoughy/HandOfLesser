@@ -418,6 +418,29 @@ namespace HOL
 			std::map<std::string, DeviceConfig> devices;
 		};
 
+		struct TrackerCalibration
+		{
+			// Bind the offset to a serial so choosing another tracker cannot reuse it by accident.
+			std::string serial;
+			HOL::PoseLocation palmOffset{Eigen::Vector3f::Zero(), Eigen::Quaternionf::Identity()};
+
+			bool isForTracker(const std::string& trackerSerial) const
+			{
+				return !serial.empty() && serial == trackerSerial && palmOffset.position.allFinite()
+					&& palmOffset.orientation.coeffs().allFinite()
+					&& palmOffset.orientation.squaredNorm() > 0.000001f;
+			}
+		};
+
+		struct BodyTrackingSettings
+		{
+			HOL::HandFallbackMode handFallbackMode = HOL::HandFallbackMode::BodyTracking;
+			// Retain tracker choices when another fallback mode is selected.
+			std::array<std::string, HOL::HandSide_MAX> fallbackTrackerSerials{};
+			bool alwaysUseTracker = false;
+			std::array<TrackerCalibration, HOL::HandSide_MAX> trackerCalibrations{};
+		};
+
 		struct TrackingFeaturesSettings
 		{
 			bool enableUpperBodyTracking = true;
@@ -442,6 +465,7 @@ namespace HOL
 			OpenXRSettings openxr;
 			SkeletalInput skeletal;
 			BodyTrackerSettings bodyTrackers;
+			BodyTrackingSettings bodyTracking;
 			DeviceSettings deviceSettings;
 			TrackingFeaturesSettings trackingFeatures;
 		};

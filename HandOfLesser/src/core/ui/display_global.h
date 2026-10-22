@@ -13,6 +13,8 @@ namespace HOL
 		float confidence = 0;
 		PoseLocation headPose;
 		bool headPoseValid = false;
+		std::atomic<bool> fallbackTrackerValid[HOL::HandSide_MAX]{};
+		std::atomic<bool> trackerCalibrationReady[HOL::HandSide_MAX]{};
 	};
 
 	struct DriverStatusDisplay

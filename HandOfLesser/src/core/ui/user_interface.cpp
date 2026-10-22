@@ -1343,9 +1343,7 @@ void HOL::UserInterface::buildMisc()
 	{
 		HOL::HandOfLesserCore::Current->featuresManager.requestBodyTrackingFidelity(true);
 	}
-
 	ImGui::SameLine();
-
 	if (ImGui::Button("Request Low Fidelity"))
 	{
 		HOL::HandOfLesserCore::Current->featuresManager.requestBodyTrackingFidelity(false);
@@ -2594,13 +2592,6 @@ void HOL::UserInterface::buildMain()
 
 	ImGui::BeginGroup();
 
-	if (ImGui::Checkbox("Upper body tracking", &Config.trackingFeatures.enableUpperBodyTracking))
-	{
-		HOL::HandOfLesserCore::Current->featuresManager.applyTrackingFeatures(
-			Config.trackingFeatures.enableUpperBodyTracking,
-			Config.trackingFeatures.enableSimultaneousTracking);
-	}
-
 	if (ImGui::Checkbox("Simultaneous hand and controller tracking",
 						&Config.trackingFeatures.enableSimultaneousTracking))
 	{
@@ -2715,6 +2706,13 @@ void HOL::UserInterface::buildTracking()
 	buildSingleHandTransformDisplay(HOL::LeftHand);
 	ImGui::SameLine();
 	buildSingleHandTransformDisplay(HOL::RightHand);
+	ImGui::EndChild();
+}
+
+void HOL::UserInterface::buildBodyTracking()
+{
+	ImGui::BeginChild(
+		"BodyTrackingWindow", ImVec2(scaleSize(PanelWidth), 0), ImGuiChildFlags_AutoResizeY);
 
 	ImGui::SeparatorText("Body tracking");
 
@@ -2748,7 +2746,112 @@ void HOL::UserInterface::buildTracking()
 							   "available here.");
 		}
 	}
+
+	ImGui::SeparatorText("Tracking features");
+	ImGui::BeginDisabled(!HOL::state::Runtime.isOVR);
+	if (ImGui::Checkbox("Request upper body tracking", &Config.trackingFeatures.enableUpperBodyTracking))
+	{
+		HOL::HandOfLesserCore::Current->featuresManager.applyTrackingFeatures(
+			Config.trackingFeatures.enableUpperBodyTracking,
+			Config.trackingFeatures.enableSimultaneousTracking);
+	}
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+	{
+		showWrappedTooltip("Upper body tracking can only be configured with the Oculus runtime.");
+	}
+	ImGui::EndDisabled();
+
+	ImGui::SeparatorText("Hand fallback");
+	int fallbackMode = static_cast<int>(Config.bodyTracking.handFallbackMode);
+	bool fallbackChanged = ImGui::RadioButton("None", &fallbackMode,
+		static_cast<int>(HOL::HandFallbackMode::None));
+	fallbackChanged |= ImGui::RadioButton("Body tracking", &fallbackMode,
+		static_cast<int>(HOL::HandFallbackMode::BodyTracking));
+	fallbackChanged |= ImGui::RadioButton("Lighthouse tracker", &fallbackMode,
+		static_cast<int>(HOL::HandFallbackMode::LighthouseTracker));
+	if (fallbackChanged)
+	{
+		Config.bodyTracking.handFallbackMode = static_cast<HOL::HandFallbackMode>(fallbackMode);
+		HOL::HandOfLesserCore::Current->syncSettings();
+	}
+	ImGui::TextWrapped("Body tracking anchors hands to the arms when upper body tracking is available, "
+		"or to the torso otherwise. Lighthouse tracker uses the selected trackers instead. "
+		"None disables hand fallback without disabling body tracking for other features.");
+
+	const bool useTrackers = Config.bodyTracking.handFallbackMode
+		== HOL::HandFallbackMode::LighthouseTracker;
+	ImGui::BeginDisabled(!useTrackers);
+	if (ImGui::Checkbox("Always use tracker", &Config.bodyTracking.alwaysUseTracker))
+	{
+		HOL::HandOfLesserCore::Current->syncSettings();
+	}
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+	{
+		showWrappedTooltip("Use the calibrated tracker position and rotation even while hand tracking "
+			"is available. Fingers still follow hand tracking. Requires calibration and a valid tracker; "
+			"otherwise that hand's output is unavailable.");
+	}
+	bool calibrationReady = false;
+	for (int side = 0; side < HOL::HandSide_MAX; side++)
+	{
+		ImGui::PushID(side);
+		auto& serial = Config.bodyTracking.fallbackTrackerSerials[side];
+		const char* label = side == HOL::LeftHand ? "Left hand" : "Right hand";
+		if (ImGui::BeginCombo(label, serial.empty() ? "Select tracker" : serial.c_str()))
+		{
+			if (ImGui::Selectable("None", serial.empty()))
+			{
+				serial.clear();
+				HOL::HandOfLesserCore::Current->syncSettings();
+			}
+			for (const auto& [deviceSerial, device] : Config.deviceSettings.devices)
+			{
+				if (device.role != vr::TrackedDeviceClass_GenericTracker)
+				{
+					continue;
+				}
+				if (ImGui::Selectable(deviceSerial.c_str(), serial == deviceSerial))
+				{
+					serial = deviceSerial;
+					HOL::HandOfLesserCore::Current->syncSettings();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		if (ImGui::IsItemHovered())
+		{
+			showWrappedTooltip("A selected tracker replaces body tracking as this hand's fallback reference. "
+				"Position and rotation relative to the tracker are recorded while the hand is tracked. "
+				"Tracker poses include SteamVR calibration, such as OpenVR Space Calibrator. "
+				"The tracker must be calibrated to the headset's play space.");
+		}
+		if (useTrackers && !serial.empty())
+		{
+			ImGui::TextDisabled(HOL::display::BodyTracking.fallbackTrackerValid[side].load()
+				? "Tracker reference valid" : "Tracker reference unavailable");
+			ImGui::TextDisabled(Config.bodyTracking.trackerCalibrations[side].isForTracker(serial)
+				? "Calibration saved" : "No saved calibration");
+			calibrationReady |= HOL::display::BodyTracking.trackerCalibrationReady[side].load();
+		}
+		ImGui::PopID();
+	}
+	ImGui::BeginDisabled(!calibrationReady);
+	if (ImGui::Button("Calibration"))
+	{
+		HOL::HandOfLesserCore::Current->calibrateTrackers();
+	}
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+	{
+		showWrappedTooltip("Capture the current hand position and rotation relative to each selected "
+			"tracker. Only hands with valid hand tracking and tracker poses are calibrated. "
+			"Always use tracker keeps this offset fixed until calibrated again. "
+			"Calibration is saved with the settings and reused after restarts.");
+	}
+	ImGui::EndDisabled();
+	ImGui::EndDisabled();
 	ImGui::EndChild();
+
+	buildBodyTrackers();
 }
 
 void UserInterface::buildVRChatOSCSettings()
@@ -2987,6 +3090,11 @@ void UserInterface::buildInterface()
 			buildTracking();
 			ImGui::EndTabItem();
 		}
+		if (ImGui::BeginTabItem("Body Tracking"))
+		{
+			buildBodyTracking();
+			ImGui::EndTabItem();
+		}
 		if (ImGui::BeginTabItem("SteamVR"))
 		{
 			buildSteamVR();
@@ -3006,12 +3114,6 @@ void UserInterface::buildInterface()
 		{
 			visualTabOpen = true;
 			buildVisual();
-			ImGui::EndTabItem();
-		}
-
-		if (ImGui::BeginTabItem("Body Trackers"))
-		{
-			buildBodyTrackers();
 			ImGui::EndTabItem();
 		}
 

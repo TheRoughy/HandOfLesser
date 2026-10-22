@@ -199,6 +199,7 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 									  bool skeletalUpdate,
 									  const HOL::HandTrackingSample* externalSample)
 {
+	this->handPose.trackedPalmLocation.reset();
 	// Copy to prev
 	std::copy(
 		std::begin(mJointLocations), std::end(mJointLocations), std::begin(mPrevJointLocations));
@@ -315,13 +316,28 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 		applyOculusThumbOrientationFix(this->mJointLocations, mSide);
 	}
 
-	// Replace current data with past, but insert palm position from body tracker
-	// Airlink provides incorrect values for anything but handtracking without controllers,
-	// so using the body trackign values actually breaks things.
-	bool alwaysUseUpperBodyTracking = false;	// Add to config later, probably does nothing though.
+	// Keep the direct sample available for calibration even when the output follows a tracker.
+	if (this->handPose.active && this->handPose.poseValid && this->handPose.poseTracked
+		&& !HOL::Config.handPose.forceInactive)
+	{
+		HOL::PoseLocation trackedPalm{toEigenVector(palmLocation.pose.position),
+			toEigenQuaternion(palmLocation.pose.orientation)};
+		if (trackedPalm.position.allFinite() && trackedPalm.orientation.coeffs().allFinite()
+			&& trackedPalm.orientation.squaredNorm() > 0.000001f)
+		{
+			trackedPalm.orientation.normalize();
+			this->handPose.trackedPalmLocation = trackedPalm;
+		}
+	}
+	const bool alwaysUseTracker = HOL::Config.bodyTracking.handFallbackMode
+		== HOL::HandFallbackMode::LighthouseTracker && HOL::Config.bodyTracking.alwaysUseTracker
+		&& !HOL::Config.bodyTracking.fallbackTrackerSerials[this->mSide].empty();
 	bool usingBodyTrackingFallback = false;
 	XrBodyJointLocationFB* bodyPalmJoint = nullptr;
-	if (bodyTracker.active)
+	// Fallback mode only controls hand substitution; body data remains available to gestures and
+	// multimodal controller detection even when fallback is disabled.
+	if (bodyTracker.active
+		&& HOL::Config.bodyTracking.handFallbackMode != HOL::HandFallbackMode::None)
 	{
 		auto& candidate = bodyTracker.getLastJointLocations()[
 			this->mSide == HandSide::LeftHand ? XR_BODY_JOINT_LEFT_HAND_PALM_FB
@@ -336,31 +352,32 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 		}
 	}
 
-	if (bodyPalmJoint != nullptr && !this->handPose.poseTracked)
+	if (bodyPalmJoint != nullptr && (!this->handPose.poseTracked || alwaysUseTracker))
 	{
-		// Copy prev to current to maintain finger pose
-		std::copy(std::begin(mPrevJointLocations),
-				  std::end(mPrevJointLocations),
-				  std::begin(mJointLocations));
+		// Keep live fingers when only the palm is tracker-driven. Lost hands retain their last
+		// finger pose through the same fallback path used for body tracking.
+		const bool fingersTracked = this->handPose.poseValid && this->handPose.poseTracked;
+		if (!fingersTracked)
+		{
+			std::copy(std::begin(mPrevJointLocations),
+					  std::end(mPrevJointLocations),
+					  std::begin(mJointLocations));
+		}
 
 		palmLocation.pose.position = bodyPalmJoint->pose.position;
 		palmLocation.pose.orientation = bodyPalmJoint->pose.orientation;
 
 		this->handPose.active = true;
 		this->handPose.poseValid = true;
-		this->handPose.poseTracked = false; // otherwise estimated usign upper-body
+		this->handPose.poseTracked = fingersTracked;
 		usingBodyTrackingFallback = true;
 	}
-	else if (bodyPalmJoint != nullptr && alwaysUseUpperBodyTracking)
+	else if (alwaysUseTracker)
 	{
-		// Just copy palm position from body.
-		palmLocation.pose.position = bodyPalmJoint->pose.position;
-		palmLocation.pose.orientation = bodyPalmJoint->pose.orientation;
-
-		this->handPose.active = true;
-		this->handPose.poseValid = true;
-		this->handPose.poseTracked = this->handPose.poseTracked; // otherwise estimated usign upper-body
-		usingBodyTrackingFallback = true;
+		// Always-on requires a valid, calibrated tracker; do not silently return to hand poses.
+		this->handPose.active = false;
+		this->handPose.poseValid = false;
+		this->handPose.poseTracked = false;
 	}
 	
 

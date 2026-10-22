@@ -377,6 +377,11 @@ namespace HOL
 
 	void HandOfLesser::handleConfigurationChange(HOL::settings::HandOfLesserSettings& oldConfig)
 	{
+		if (Config.bodyTracking.handFallbackMode != oldConfig.bodyTracking.handFallbackMode)
+		{
+			// Starting tracker fallback needs the cached HMD even if its pose has not changed.
+			notifySteamVRHandTracking();
+		}
 		bool devicesChanged = false;
 		mHasConfiguredShadowTrackers = false;
 		for (const auto& [serial, device] : Config.deviceSettings.devices)
@@ -1811,6 +1816,8 @@ namespace HOL
 			const auto now = std::chrono::steady_clock::now();
 			const bool forwardingEnabled
 				= Runtime.trackingProvider == HOL::state::TrackingProvider::SteamVRDriver;
+			const bool forwardHmd = forwardingEnabled
+				|| Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker;
 			const auto selectedHmd = getHMD();
 			// Keep the previous HMD alive long enough to publish one inactive update if SteamVR
 			// removes it. Otherwise the app would keep using its last valid pose indefinitely.
@@ -1821,7 +1828,7 @@ namespace HOL
 			if (hmdSource)
 			{
 				const auto update = hmdSource->getForwardedHmdPoseUpdate(
-					hmdPoseState, forwardingEnabled && selectedHmd == hmdSource, forceResync);
+					hmdPoseState, forwardHmd && selectedHmd == hmdSource, forceResync);
 				if (update)
 				{
 					mTransport.sendPayload<NativePacketType::SteamVRHmdPose>(*update);

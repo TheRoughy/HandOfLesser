@@ -263,14 +263,16 @@ namespace HOL::hooks
 				const bool forwardingSteamVRTracking
 					= HOL::HandOfLesser::Runtime.trackingProvider
 					  == HOL::state::TrackingProvider::SteamVRDriver;
+				const bool forwardHmd = forwardedHmdPose
+					&& (forwardingSteamVRTracking
+						|| config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker);
 				if ((forwardingSteamVRTracking && forwardedHandTrackingController)
 					|| forwardedHmdPose)
 				{
-					// HMD poses are always cached for hand-pointer generation. Wake the forwarding
-					// thread for them only when the app is using SteamVR as its tracking provider.
+					// The pointer uses the cached HMD locally. The app also needs it for SteamVR
+					// tracking and tracker-space alignment, regardless of the active hand provider.
 					if (controller->cacheForwardedPose(newPose, newPoseValid)
-						&& (forwardedHandTrackingController
-							|| (forwardedHmdPose && forwardingSteamVRTracking)))
+						&& (forwardedHandTrackingController || forwardHmd))
 					{
 						HOL::HandOfLesser::Current->notifySteamVRHandTracking();
 					}

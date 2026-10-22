@@ -34,6 +34,16 @@ namespace HOL::SteamVR
 		mHmdPose.store(std::make_shared<const HOL::SteamVRHmdPosePayload>(payload));
 	}
 
+	std::optional<HOL::PoseLocation> SteamVRTrackingSource::getHmdPose() const
+	{
+		const auto hmdPose = mHmdPose.load();
+		if (!hmdPose || !hmdPose->active)
+		{
+			return std::nullopt;
+		}
+		return getSteamVRDevicePose(hmdPose->pose);
+	}
+
 	void SteamVRTrackingSource::setInactive(SideState& state)
 	{
 		// Publish the active-to-inactive transition once without manufacturing updates every frame.
@@ -207,11 +217,7 @@ namespace HOL::SteamVR
 						 std::chrono::steady_clock::now().time_since_epoch())
 						 .count();
 
-		const auto hmdPose = mHmdPose.load();
-		if (hmdPose && hmdPose->active)
-		{
-			frame.hmdPose = getSteamVRDevicePose(hmdPose->pose);
-		}
+		frame.hmdPose = getHmdPose();
 
 		for (int side = 0; side < HOL::HandSide_MAX; side++)
 		{

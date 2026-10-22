@@ -15,6 +15,25 @@ namespace nlohmann
 		}
 	}
 
+	template <> struct adl_serializer<Eigen::Quaternionf>
+	{
+		static void to_json(json& j, const Eigen::Quaternionf& quaternion)
+		{
+			j = {{"x", quaternion.x()},
+				 {"y", quaternion.y()},
+				 {"z", quaternion.z()},
+				 {"w", quaternion.w()}};
+		}
+
+		static void from_json(const json& j, Eigen::Quaternionf& quaternion)
+		{
+			quaternion = Eigen::Quaternionf(j.at("w").get<float>(),
+										 j.at("x").get<float>(),
+										 j.at("y").get<float>(),
+										 j.at("z").get<float>());
+		}
+	};
+
 	template <> struct adl_serializer<Eigen::Vector3f>
 	{
 		static void to_json(json& j, const Eigen::Vector3f& vec)
