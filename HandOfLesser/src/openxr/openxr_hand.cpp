@@ -287,7 +287,9 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 	}
 	HOL::display::HandTransform[this->mSide].trackedJointCount = trackedCount;
 
-	auto& palmLocation = this->mJointLocations[XrHandJointEXT::XR_HAND_JOINT_PALM_EXT];
+	// Keep the sensor joints together for finger geometry. Fallback changes the output palm,
+	// not the reference frame used to measure curls and pinch planes from the live fingers.
+	auto palmLocation = this->mJointLocations[XrHandJointEXT::XR_HAND_JOINT_PALM_EXT];
 
 	// Orientation is not going to be set without position for hand tracking.
 	this->handPose.poseValid = (palmLocation.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
@@ -356,7 +358,7 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 	{
 		// Keep live fingers when only the palm is tracker-driven. Lost hands retain their last
 		// finger pose through the same fallback path used for body tracking.
-		const bool fingersTracked = this->handPose.poseValid && this->handPose.poseTracked;
+		const bool fingersTracked = this->handPose.trackedPalmLocation.has_value();
 		if (!fingersTracked)
 		{
 			std::copy(std::begin(mPrevJointLocations),
@@ -366,9 +368,16 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 
 		palmLocation.pose.position = bodyPalmJoint->pose.position;
 		palmLocation.pose.orientation = bodyPalmJoint->pose.orientation;
+		palmLocation.locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT
+			| XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+		if (!fingersTracked)
+		{
+			this->mJointLocations[XR_HAND_JOINT_PALM_EXT] = palmLocation;
+		}
 
 		this->handPose.active = true;
 		this->handPose.poseValid = true;
+		// A tracked tracker position does not make the hand or fingers tracked.
 		this->handPose.poseTracked = fingersTracked;
 		usingBodyTrackingFallback = true;
 	}

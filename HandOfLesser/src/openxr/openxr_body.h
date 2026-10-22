@@ -24,9 +24,11 @@ public:
 								  const HOL::PoseLocation* hmdPose,
 								  const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
 									  lastHandPoses,
-								  const HOL::BodyTrackingSample* externalSample,
-								  const std::array<std::optional<HOL::PoseLocation>, HOL::HandSide_MAX>&
-									  trackerReferences);
+								  const HOL::BodyTrackingSample* externalSample);
+	// Refresh tracker-driven palms without reacquiring body or finger joints.
+	void updateTrackerFallback(XrTime time,
+		const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
+		const std::array<std::optional<HOL::PoseLocation>, HOL::HandSide_MAX>& trackerReferences);
 
 	XrBodyJointLocationFB* getLastJointLocations();
 	const XrBodyJointLocationFB* getLastJointLocations() const;
@@ -62,8 +64,7 @@ private:
 
 	void preservePalmPose(HandSide side, const XrBodyJointLocationFB& anchor);
 	void updatePalmFallback(HandSide side, XrTime time, const HOL::HandPose& lastHandPose,
-		bool usingSyntheticBody, const std::optional<HOL::PoseLocation>& trackerReference,
-		bool calibrateTrackers);
+		bool usingSyntheticBody);
 	void updateTrackerPalm(HandSide side, XrTime time, const HOL::HandPose& lastHandPose,
 		const std::optional<HOL::PoseLocation>& trackerReference, bool calibrate);
 	bool canUseArmTrackingAnchor() const;
@@ -86,6 +87,8 @@ private:
 	// External body samples count as available even though no native tracker handle exists.
 	bool mUsingExternalBody = false;
 	bool mUsingSyntheticBody = true;
+	// Tracker availability must not keep the body active after both trackers disappear.
+	bool mBodyActive = false;
 	HOL::HandFallbackMode mFallbackMode = HOL::HandFallbackMode::BodyTracking;
 	XrPath mInputSourcePath;
 	XrBodyJointLocationFB mJointLocations[XR_BODY_JOINT_COUNT_FB]{};

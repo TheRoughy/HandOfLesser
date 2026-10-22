@@ -656,25 +656,26 @@ bool HandOfLesserCore::updateTracking(bool skeletalUpdate)
 		}
 	}
 
+	const std::array<const HOL::HandPose*, HOL::HandSide_MAX> lastHandPoses = {
+		&this->mHandTracking.getHandPose(HOL::HandSide::LeftHand),
+		&this->mHandTracking.getHandPose(HOL::HandSide::RightHand),
+	};
 	if (skeletalUpdate)
 	{
-		// Tracker alignment uses the native HMD even when hands come from another provider.
-		const auto steamVRHmdPose
-			= Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker
-				  ? mHandTracking.getSteamVRTrackingSource().getHmdPose()
-				  : std::nullopt;
-		const std::array<const HOL::HandPose*, HOL::HandSide_MAX> lastHandPoses = {
-			&this->mHandTracking.getHandPose(HOL::HandSide::LeftHand),
-			&this->mHandTracking.getHandPose(HOL::HandSide::RightHand),
-		};
 		this->mBodyTracking.updateBody(
 			space,
 			time,
 			hmdPose ? &*hmdPose : nullptr,
 			lastHandPoses,
-			bodySample,
-			steamVRHmdPose ? &*steamVRHmdPose : nullptr);
+			bodySample);
 	}
+	// Fallback trackers can move between skeletal ticks, just like directly tracked palms.
+	const auto steamVRHmdPose
+		= Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker
+			  ? mHandTracking.getSteamVRTrackingSource().getHmdPose()
+			  : std::nullopt;
+	this->mBodyTracking.updateTrackers(
+		time, lastHandPoses, steamVRHmdPose ? &*steamVRHmdPose : nullptr);
 	this->mHandTracking.updateHands(
 		space,
 		time,

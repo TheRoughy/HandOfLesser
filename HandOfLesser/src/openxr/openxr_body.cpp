@@ -117,15 +117,9 @@ void OpenXRBody::updateJointLocations(XrSpace space,
 								  const HOL::PoseLocation* hmdPose,
 								  const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
 									  lastHandPoses,
-								  const HOL::BodyTrackingSample* externalSample,
-								  const std::array<std::optional<HOL::PoseLocation>, HOL::HandSide_MAX>&
-									  trackerReferences)
+								  const HOL::BodyTrackingSample* externalSample)
 {
-	const bool calibrateTrackers = mTrackerCalibrationRequested.exchange(false);
-	for (auto& ready : HOL::display::BodyTracking.trackerCalibrationReady)
-	{
-		ready.store(false);
-	}
+	mBodyActive = false;
 	std::copy(std::begin(mJointLocations),
 			  std::end(mJointLocations),
 			  std::begin(mPreviousJointLocations));
@@ -215,12 +209,12 @@ void OpenXRBody::updateJointLocations(XrSpace space,
 	// Use metacarpal tracking state to detect loss - fingers remain tracked until fully lost
 	// VDXR marks wrist onwards as tracked when tracked, rest untracked.
 	// Oculus only marks metacarpal and onwards.
-	if (fallbackMode != HOL::HandFallbackMode::None)
+	if (fallbackMode == HOL::HandFallbackMode::BodyTracking)
 	{
 		for (int side = 0; side < HOL::HandSide_MAX; side++)
 		{
 			updatePalmFallback(static_cast<HandSide>(side), time, *lastHandPoses[side],
-				usingSyntheticBody, trackerReferences[side], calibrateTrackers);
+				usingSyntheticBody);
 		}
 	}
 
@@ -229,14 +223,7 @@ void OpenXRBody::updateJointLocations(XrSpace space,
 		active = hasValidPose(mJointLocations[XR_BODY_JOINT_HEAD_FB])
 				 && hasValidPose(mJointLocations[XR_BODY_JOINT_CHEST_FB]);
 	}
-	for (int side = 0; side < HOL::HandSide_MAX; side++)
-	{
-		if (fallbackMode == HOL::HandFallbackMode::LighthouseTracker)
-		{
-			active |= hasValidPose(mJointLocations[side == HOL::LeftHand
-				? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB]);
-		}
-	}
+	mBodyActive = active;
 
 	// Buffer used by any callers so they don't get mid-correction data
 	std::copy(std::begin(mJointLocations),
@@ -248,6 +235,32 @@ void OpenXRBody::updateJointLocations(XrSpace space,
 
 	// Display
 	HOL::display::BodyTracking.confidence = this->confidence;
+}
+
+void OpenXRBody::updateTrackerFallback(XrTime time,
+	const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
+	const std::array<std::optional<HOL::PoseLocation>, HOL::HandSide_MAX>& trackerReferences)
+{
+	const bool calibrate = mTrackerCalibrationRequested.exchange(false);
+	if (HOL::Config.bodyTracking.handFallbackMode != HOL::HandFallbackMode::LighthouseTracker)
+	{
+		for (auto& ready : HOL::display::BodyTracking.trackerCalibrationReady)
+		{
+			ready.store(false);
+		}
+		return;
+	}
+
+	active = mBodyActive;
+	for (int side = 0; side < HOL::HandSide_MAX; side++)
+	{
+		updateTrackerPalm(static_cast<HandSide>(side), time, *lastHandPoses[side],
+			trackerReferences[side], calibrate);
+		const auto joint = side == HOL::LeftHand
+			? XR_BODY_JOINT_LEFT_HAND_PALM_FB : XR_BODY_JOINT_RIGHT_HAND_PALM_FB;
+		mCorrectedJointLocations[joint] = mJointLocations[joint];
+		active |= hasValidPose(mJointLocations[joint]);
+	}
 }
 
 XrBodyJointLocationFB* OpenXRBody::getLastJointLocations()
@@ -332,14 +345,8 @@ void OpenXRBody::setFallbackJointLocations(
 }
 
 void OpenXRBody::updatePalmFallback(HandSide side, XrTime time,
-	const HOL::HandPose& lastHandPose, bool usingSyntheticBody,
-	const std::optional<HOL::PoseLocation>& trackerReference, bool calibrateTrackers)
+	const HOL::HandPose& lastHandPose, bool usingSyntheticBody)
 {
-	if (HOL::Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker)
-	{
-		updateTrackerPalm(side, time, lastHandPose, trackerReference, calibrateTrackers);
-		return;
-	}
 	const bool handTracked = lastHandPose.poseValid && lastHandPose.poseTracked;
 	const auto anchorJoint = !usingSyntheticBody && canUseArmTrackingAnchor()
 		? (side == HOL::LeftHand ? XR_BODY_JOINT_LEFT_ARM_LOWER_FB

@@ -47,6 +47,10 @@ namespace HOL::Gesture::FacingGesture
 		{
 			return 0.0f;
 		}
+		// Facing modifiers must agree with the live fingers even when controller output follows
+		// a calibrated tracker. With no tracked hand, retain the normal fallback palm behavior.
+		const auto& palm = handPose->trackedPalmLocation
+			? *handPose->trackedPalmLocation : handPose->palmLocation;
 
 		Eigen::Vector3f sourcePosition = Eigen::Vector3f::Zero();
 		Eigen::Quaternionf sourceOrientation = Eigen::Quaternionf::Identity();
@@ -61,8 +65,8 @@ namespace HOL::Gesture::FacingGesture
 				break;
 
 			case Source::Palm:
-				sourcePosition = handPose->palmLocation.position;
-				sourceOrientation = handPose->palmLocation.orientation;
+				sourcePosition = palm.position;
+				sourceOrientation = palm.orientation;
 				break;
 		}
 
@@ -70,7 +74,7 @@ namespace HOL::Gesture::FacingGesture
 		switch (this->parameters.target)
 		{
 			case Target::HandPalm:
-				targetPosition = handPose->palmLocation.position;
+				targetPosition = palm.position;
 				break;
 
 			case Target::Head:

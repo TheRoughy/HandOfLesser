@@ -145,6 +145,7 @@ namespace HOL::SteamVR
 					return result;
 				case vr::VREvent_ChaperoneUniverseHasChanged:
 				case vr::VREvent_SeatedZeroPoseReset:
+				case vr::VREvent_StandingZeroPoseReset:
 					resetAlignment();
 					break;
 				case vr::VREvent_TrackedDeviceActivated:
@@ -161,6 +162,7 @@ namespace HOL::SteamVR
 
 		// Standing poses include calibration add-ons regardless of the order their hooks ran.
 		// GetRawTrackedDevicePoses would leave us with driver-specific reference spaces instead.
+		// Tracker recalibration is reflected here immediately; only the origin mapping is cached.
 		vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount]{};
 		mSystem->GetDeviceToAbsoluteTrackingPose(
 			vr::TrackingUniverseStanding, 0.0f, poses, vr::k_unMaxTrackedDeviceCount);

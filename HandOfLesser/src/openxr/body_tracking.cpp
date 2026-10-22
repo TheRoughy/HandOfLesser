@@ -23,8 +23,14 @@ void HOL::OpenXR::BodyTracking::updateBody(XrSpace space,
 										   const HOL::PoseLocation* hmdPose,
 										   const std::array<const HOL::HandPose*, HOL::HandSide_MAX>&
 											   lastHandPoses,
-										   const HOL::BodyTrackingSample* externalSample,
-										   const HOL::PoseLocation* steamVRHmdPose)
+										   const HOL::BodyTrackingSample* externalSample)
+{
+	this->mBodyTracker.updateJointLocations(space, time, hmdPose, lastHandPoses, externalSample);
+}
+
+void HOL::OpenXR::BodyTracking::updateTrackers(XrTime time,
+	const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
+	const HOL::PoseLocation* steamVRHmdPose)
 {
 	HOL::SteamVR::FallbackTrackerSource::TrackerPoses trackerReferences{};
 	if (Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker)
@@ -40,8 +46,7 @@ void HOL::OpenXR::BodyTracking::updateBody(XrSpace space,
 	{
 		HOL::display::BodyTracking.fallbackTrackerValid[side].store(trackerReferences[side].has_value());
 	}
-	this->mBodyTracker.updateJointLocations(
-		space, time, hmdPose, lastHandPoses, externalSample, trackerReferences);
+	this->mBodyTracker.updateTrackerFallback(time, lastHandPoses, trackerReferences);
 }
 
 OpenXRBody& HOL::OpenXR::BodyTracking::getBodyTracker()

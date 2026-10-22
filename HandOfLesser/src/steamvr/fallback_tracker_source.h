@@ -33,10 +33,10 @@ namespace HOL::SteamVR
 		TrackerPoses update(const std::array<std::string, HOL::HandSide_MAX>& serials,
 							const HOL::PoseLocation* sourceHmdPose);
 		void reset();
-		// Re-establish the standing-to-tracking transform after SteamVR's origin changes.
-		void resetAlignment();
 
 	private:
+		// Re-establish the standing-to-tracking transform after SteamVR's origin changes.
+		void resetAlignment();
 		bool connect();
 		void findTrackers(const std::array<std::string, HOL::HandSide_MAX>& serials);
 		static std::optional<HOL::PoseLocation> toPoseLocation(const vr::TrackedDevicePose_t& pose);
