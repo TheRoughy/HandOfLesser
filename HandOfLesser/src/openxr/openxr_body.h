@@ -9,6 +9,7 @@
 #include <HandOfLesserCommon.h>
 #include "src/hand/body_tracking_sample.h"
 #include "src/hands/hand_pose.h"
+#include "src/steamvr/fallback_tracker_source.h"
 
 using namespace HOL;
 
@@ -28,11 +29,13 @@ public:
 	// Refresh tracker-driven palms without reacquiring body or finger joints.
 	void updateTrackerFallback(XrTime time,
 		const std::array<const HOL::HandPose*, HOL::HandSide_MAX>& lastHandPoses,
-		const std::array<std::optional<HOL::PoseLocation>, HOL::HandSide_MAX>& trackerReferences);
+		const HOL::SteamVR::FallbackTrackerSource::TrackerPoses& trackerReferences);
 
 	XrBodyJointLocationFB* getLastJointLocations();
 	const XrBodyJointLocationFB* getLastJointLocations() const;
 	const XrBodyJointLocationFB& getRuntimePalmJoint(HOL::HandSide side) const;
+	// Body fallback has no reliable velocity; tracker fallback supplies velocity at the palm.
+	HOL::PoseVelocity getFallbackPalmVelocity(HOL::HandSide side) const;
 	bool isAvailable() const;
 	XrBodyTrackerFB getBodyTrackerFB();
 	bool getHeadPose(HOL::PoseLocation& pose) const;
@@ -66,7 +69,8 @@ private:
 	void updatePalmFallback(HandSide side, XrTime time, const HOL::HandPose& lastHandPose,
 		bool usingSyntheticBody);
 	void updateTrackerPalm(HandSide side, XrTime time, const HOL::HandPose& lastHandPose,
-		const std::optional<HOL::PoseLocation>& trackerReference, bool calibrate);
+		const std::optional<HOL::SteamVR::FallbackTrackerSource::TrackerPose>& trackerReference,
+		bool calibrate);
 	bool canUseArmTrackingAnchor() const;
 	void reconstructPalmJoint(HandSide side);
 	void updateTrackedPalmTransform(HandSide side, const XrBodyJointLocationFB& anchor, XrTime time);
@@ -79,6 +83,7 @@ private:
 												 const Eigen::Quaternionf& bogusOrientation);
 	StoredPalmTransform mStoredPalmTransforms[2]{};
 	std::array<std::string, HOL::HandSide_MAX> mFallbackTrackerSerials{};
+	std::array<std::optional<HOL::PoseVelocity>, HOL::HandSide_MAX> mTrackerPalmVelocities{};
 	std::atomic<bool> mTrackerCalibrationRequested = false;
 	XrTime mHandTrackingAcquiredTime[2]{};
 	bool mWasHandTrackingTracked[2]{};

@@ -45,6 +45,7 @@ private:
 	XrHandTrackingDataSourceStateEXT mDataSourceState{XR_TYPE_HAND_TRACKING_DATA_SOURCE_STATE_EXT};
 
 	HOL::PoseLocation mPrevRawPose{};
+	HOL::PoseVelocity mPrevRawVelocity{};
 	HOL::PoseFilter mPalmPoseFilter{};
 	uint64_t mPrevExternalUpdateGeneration = 0;
 	bool mPrevActive = false;

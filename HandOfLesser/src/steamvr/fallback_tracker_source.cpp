@@ -201,7 +201,24 @@ namespace HOL::SteamVR
 									+ mTrackingFromStanding->orientation * tracker->position;
 				tracker->orientation
 					= (mTrackingFromStanding->orientation * tracker->orientation).normalized();
-				result[side] = tracker;
+				TrackerPose sample;
+				sample.location = *tracker;
+				const auto& pose = poses[id];
+				const Eigen::Vector3f linearVelocity(
+					pose.vVelocity.v[0], pose.vVelocity.v[1], pose.vVelocity.v[2]);
+				const Eigen::Vector3f angularVelocity(
+					pose.vAngularVelocity.v[0], pose.vAngularVelocity.v[1], pose.vAngularVelocity.v[2]);
+				// Velocities use the same reference-space rotation as positions, but no translation.
+				// A bad velocity must not invalidate an otherwise usable tracker pose.
+				if (linearVelocity.allFinite())
+				{
+					sample.velocity.linearVelocity = mTrackingFromStanding->orientation * linearVelocity;
+				}
+				if (angularVelocity.allFinite())
+				{
+					sample.velocity.angularVelocity = mTrackingFromStanding->orientation * angularVelocity;
+				}
+				result[side] = sample;
 			}
 		}
 		return result;

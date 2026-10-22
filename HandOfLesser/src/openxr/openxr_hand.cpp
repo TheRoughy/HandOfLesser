@@ -419,6 +419,8 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 							|| this->handPose.poseValid != prevPoseValid
 							|| this->handPose.poseTracked != prevPoseTracked;
 	this->handPose.poseStale = false;
+	const bool usingTrackerFallback = usingBodyTrackingFallback
+		&& HOL::Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker;
 
 	if (this->handPose.poseValid)
 	{
@@ -453,6 +455,31 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 			}
 		}
 
+		HOL::PoseVelocity rawPalmVelocity;
+		if (usingBodyTrackingFallback)
+		{
+			// The fallback's velocity belongs to its substituted palm, not the hand sensor sample.
+			rawPalmVelocity = bodyTracker.getFallbackPalmVelocity(this->mSide);
+		}
+		else
+		{
+			rawPalmVelocity.linearVelocity = toEigenVector(palmVelocity.linearVelocity);
+			rawPalmVelocity.angularVelocity = toEigenVector(palmVelocity.angularVelocity);
+			// Blend in hand velocity gradually when tracking resumes so SteamVR prediction
+			// does not latch onto a bogus recovery sample.
+			rawPalmVelocity.linearVelocity *= resumeBlendAlpha;
+			rawPalmVelocity.angularVelocity *= resumeBlendAlpha;
+		}
+		if (!usingTrackerFallback)
+		{
+			// Tracker velocities describe a current-time pose and must retain normal prediction,
+			// even on runtimes whose pre-predicted hand poses require zero velocity multipliers.
+			rawPalmVelocity.linearVelocity
+				*= HOL::Config.steamvr.poseSmoothing.linearVelocityMultiplier;
+			rawPalmVelocity.angularVelocity
+				*= HOL::Config.steamvr.poseSmoothing.angularVelocityMultiplier;
+		}
+
 		//////////////
 		// Staleness
 		//////////////
@@ -475,6 +502,14 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 					newPalmOrientation.coeffs());
 			this->mPrevExternalUpdateGeneration = 0;
 		}
+		if (usingTrackerFallback)
+		{
+			// A changed velocity must reach SteamVR even if the pose is identical, particularly
+			// when motion stops and the previous velocity must no longer drive prediction.
+			this->handPose.poseStale = this->handPose.poseStale
+				&& this->mPrevRawVelocity.linearVelocity.isApprox(rawPalmVelocity.linearVelocity)
+				&& this->mPrevRawVelocity.angularVelocity.isApprox(rawPalmVelocity.angularVelocity);
+		}
 
 		if (!this->handPose.poseStale)
 		{
@@ -489,33 +524,7 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 			rawPalmPose.position = newPalmPosition;
 			rawPalmPose.orientation = newPalmOrientation;
 
-			HOL::PoseVelocity rawPalmVelocity;
-			rawPalmVelocity.linearVelocity = toEigenVector(palmVelocity.linearVelocity);
-			rawPalmVelocity.angularVelocity = toEigenVector(palmVelocity.angularVelocity);
-
-			if (usingBodyTrackingFallback)
-			{
-				// The fallback pose comes from body tracking, so the hand-joint velocity no longer
-				// corresponds to the pose we are submitting.
-				rawPalmVelocity.linearVelocity = Eigen::Vector3f::Zero();
-				rawPalmVelocity.angularVelocity = Eigen::Vector3f::Zero();
-			}
-			else if (resumeBlendAlpha < 1.0f)
-			{
-				// Blend in hand velocity gradually when tracking resumes so SteamVR prediction
-				// does not latch onto a bogus recovery sample.
-				rawPalmVelocity.linearVelocity *= resumeBlendAlpha;
-				rawPalmVelocity.angularVelocity *= resumeBlendAlpha;
-			}
-
-			rawPalmVelocity.linearVelocity
-				*= HOL::Config.steamvr.poseSmoothing.linearVelocityMultiplier;
-			rawPalmVelocity.angularVelocity
-				*= HOL::Config.steamvr.poseSmoothing.angularVelocityMultiplier;
-
 			HOL::PoseFilterParameters filterParameters;
-			const bool usingTrackerFallback = usingBodyTrackingFallback
-				&& HOL::Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker;
 			// Trackers do not need visual-tracking smoothing. Keep trigger stabilization and filter
 			// history so pressing or releasing the trigger still stabilizes the same output pose.
 			filterParameters.positionSmoothingMS
@@ -617,6 +626,7 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 			// Set prev
 			this->mPrevRawPose.position = newPalmPosition;
 			this->mPrevRawPose.orientation = newPalmOrientation;
+			this->mPrevRawVelocity = rawPalmVelocity;
 			this->mHasPrevRawPose = true;
 
 			///////////////////////////

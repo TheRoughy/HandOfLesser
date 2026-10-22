@@ -22,7 +22,12 @@ namespace HOL::SteamVR
 	class FallbackTrackerSource
 	{
 	public:
-		using TrackerPoses = std::array<std::optional<HOL::PoseLocation>, HOL::HandSide_MAX>;
+		struct TrackerPose
+		{
+			HOL::PoseLocation location;
+			HOL::PoseVelocity velocity{Eigen::Vector3f::Zero(), Eigen::Vector3f::Zero()};
+		};
+		using TrackerPoses = std::array<std::optional<TrackerPose>, HOL::HandSide_MAX>;
 
 		~FallbackTrackerSource();
 		FallbackTrackerSource() = default;
