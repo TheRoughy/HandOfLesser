@@ -514,11 +514,15 @@ void OpenXRHand::updateJointLocations(XrSpace space,
 				*= HOL::Config.steamvr.poseSmoothing.angularVelocityMultiplier;
 
 			HOL::PoseFilterParameters filterParameters;
+			const bool usingTrackerFallback = usingBodyTrackingFallback
+				&& HOL::Config.bodyTracking.handFallbackMode == HOL::HandFallbackMode::LighthouseTracker;
+			// Trackers do not need visual-tracking smoothing. Keep trigger stabilization and filter
+			// history so pressing or releasing the trigger still stabilizes the same output pose.
 			filterParameters.positionSmoothingMS
-				= HOL::Config.steamvr.poseSmoothing.positionSmoothingMS
+				= (usingTrackerFallback ? 0.0f : HOL::Config.steamvr.poseSmoothing.positionSmoothingMS)
 				  + triggerStabilizationSmoothingMS;
 			filterParameters.rotationSmoothingMS
-				= HOL::Config.steamvr.poseSmoothing.rotationSmoothingMS
+				= (usingTrackerFallback ? 0.0f : HOL::Config.steamvr.poseSmoothing.rotationSmoothingMS)
 				  + triggerStabilizationSmoothingMS;
 			filterParameters.positionJitterRadiusMM
 				= HOL::Config.steamvr.poseSmoothing.positionJitterRadiusMM;
