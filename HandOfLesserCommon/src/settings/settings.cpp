@@ -131,6 +131,16 @@ namespace HOL::settings
 			addBinding(b);
 		}
 
+		// Right SteamVR input toggle — Pinky, middle, ring, then index taps against the thumb.
+		{
+			GestureBinding b;
+			b.side = HOL::RightHand;
+			b.kind = GestureKind::Chain;
+			b.chainFingers = {HOL::FingerLittle, HOL::FingerMiddle, HOL::FingerRing, HOL::FingerIndex};
+			b.target = InputTarget::Toggle_SteamVRInput;
+			addBinding(b);
+		}
+
 		return bindings;
 	}
 
