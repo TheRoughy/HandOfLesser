@@ -93,8 +93,9 @@ namespace HOL::SteamVR
 	std::optional<HOL::PoseLocation>
 	FallbackTrackerSource::toPoseLocation(const vr::TrackedDevicePose_t& pose)
 	{
-		if (!pose.bDeviceIsConnected || !pose.bPoseIsValid
-			|| pose.eTrackingResult != vr::TrackingResult_Running_OK)
+		// Degraded tracking can still provide a usable pose. SteamVR's validity flag decides
+		// whether to use it, rather than requiring perfect tracking quality.
+		if (!pose.bDeviceIsConnected || !pose.bPoseIsValid)
 		{
 			return std::nullopt;
 		}
